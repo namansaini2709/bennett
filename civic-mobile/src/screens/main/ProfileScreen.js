@@ -9,17 +9,44 @@ import {
   Image
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '../../context/AuthContext';
+import reportService from '../../services/reportService';
 
 const ProfileScreen = ({ navigation }) => {
+  const { user: authUser, logout } = useAuth();
   const [user, setUser] = useState({
-    name: 'Test User',
-    email: 'citizen@test.com',
-    phone: '+91 9876543210',
-    location: 'Jharkhand, India',
-    reportsCount: 5,
-    joinDate: '2024-01-01'
+    name: authUser?.name || 'User',
+    email: authUser?.email || 'No email provided',
+    phone: authUser?.phone || 'No phone provided',
+    location: typeof authUser?.address === 'string' 
+      ? authUser.address 
+      : authUser?.address?.city || 'No location provided',
+    reportsCount: 0,
+    joinDate: authUser?.createdAt 
+      ? (typeof authUser.createdAt === 'string' 
+          ? authUser.createdAt.split('T')[0] 
+          : new Date(authUser.createdAt).toISOString().split('T')[0])
+      : new Date().toISOString().split('T')[0]
   });
+
+  useEffect(() => {
+    fetchUserReportCount();
+  }, []);
+
+  const fetchUserReportCount = async () => {
+    try {
+      const result = await reportService.getMyReports();
+      if (result.success && result.data) {
+        setUser(prevUser => ({
+          ...prevUser,
+          reportsCount: result.data.length
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching user report count:', error);
+      // Keep default value of 0 if error occurs
+    }
+  };
 
   const menuItems = [
     {
@@ -80,12 +107,15 @@ const ProfileScreen = ({ navigation }) => {
 
   const performLogout = async () => {
     try {
-      await AsyncStorage.removeItem('authToken');
-      await AsyncStorage.removeItem('userInfo');
-      // Navigate to auth stack - this would be handled by app state management
-      Alert.alert('Success', 'Logged out successfully');
+      await logout();
+      // Navigate back to Auth stack after successful logout
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Auth' }],
+      });
     } catch (error) {
       console.error('Logout error:', error);
+      Alert.alert('Error', 'Failed to logout. Please try again.');
     }
   };
 
@@ -135,7 +165,7 @@ const ProfileScreen = ({ navigation }) => {
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Text style={styles.statNumber}>
-              {new Date(user.joinDate).getFullYear()}
+              {user.joinDate ? new Date(user.joinDate).getFullYear() : new Date().getFullYear()}
             </Text>
             <Text style={styles.statLabel}>Member Since</Text>
           </View>
@@ -158,7 +188,9 @@ const ProfileScreen = ({ navigation }) => {
         
         <View style={styles.infoItem}>
           <MaterialCommunityIcons name="calendar" size={20} color="#666" />
-          <Text style={styles.infoText}>Joined {user.joinDate}</Text>
+          <Text style={styles.infoText}>
+            Joined {user.joinDate ? new Date(user.joinDate).toLocaleDateString() : 'Unknown'}
+          </Text>
         </View>
       </View>
 

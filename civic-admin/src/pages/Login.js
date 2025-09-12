@@ -24,15 +24,23 @@ const Login = () => {
     setError('');
     setLoading(true);
 
-    const result = await login(emailOrPhone, password);
-    
-    if (result.success) {
-      navigate('/dashboard');
-    } else {
-      setError(result.message);
+    try {
+      const result = await login(emailOrPhone, password);
+      
+      if (result.success) {
+        // Small delay to ensure state is set before navigation
+        setTimeout(() => {
+          navigate('/dashboard', { replace: true });
+        }, 100);
+      } else {
+        setError(result.message);
+        setLoading(false);
+      }
+    } catch (error) {
+      console.error('Login submit error:', error);
+      setError('Login failed. Please try again.');
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
   return (

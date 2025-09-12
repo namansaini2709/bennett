@@ -23,6 +23,7 @@ import {
   Warning
 } from '@mui/icons-material';
 import axios from 'axios';
+import { getStatusColor, getStatusLabel } from '../constants/reportStatus';
 
 const API_BASE_URL = 'http://localhost:5000/api';
 
@@ -40,6 +41,14 @@ const Dashboard = () => {
 
   useEffect(() => {
     fetchDashboardData();
+    
+    // Set up auto-refresh every 30 seconds
+    const interval = setInterval(() => {
+      fetchDashboardData();
+    }, 30000);
+    
+    // Cleanup on unmount
+    return () => clearInterval(interval);
   }, []);
 
   const fetchDashboardData = async () => {
@@ -55,18 +64,7 @@ const Dashboard = () => {
     }
   };
 
-  const getStatusColor = (status) => {
-    const colors = {
-      submitted: 'info',
-      acknowledged: 'info',
-      assigned: 'warning',
-      in_progress: 'warning',
-      resolved: 'success',
-      rejected: 'error',
-      closed: 'default'
-    };
-    return colors[status] || 'default';
-  };
+  // Status functions are now imported from centralized config
 
   const statCards = [
     {
@@ -165,9 +163,22 @@ const Dashboard = () => {
                   <TableCell>{report.category}</TableCell>
                   <TableCell>
                     <Chip
-                      label={report.status}
+                      label={getStatusLabel(report.status)}
                       color={getStatusColor(report.status)}
                       size="small"
+                      sx={{
+                        height: '24px',
+                        fontSize: '12px',
+                        fontWeight: 500,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        '& .MuiChip-label': {
+                          paddingLeft: '8px',
+                          paddingRight: '8px',
+                          lineHeight: '1.2'
+                        }
+                      }}
                     />
                   </TableCell>
                   <TableCell>{report.assignedTo?.name || '-'}</TableCell>

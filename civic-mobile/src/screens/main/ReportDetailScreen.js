@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { REPORT_STATUS, PRIORITY_LEVELS } from '../../constants/config';
+import reportService from '../../services/reportService';
+import { showErrorAlert } from '../../utils/errorHandler';
 
 const ReportDetailScreen = ({ route, navigation }) => {
   const { reportId } = route.params;
@@ -23,47 +25,42 @@ const ReportDetailScreen = ({ route, navigation }) => {
 
   const fetchReportDetails = async () => {
     try {
-      // Mock data for now
-      const mockReport = {
-        id: reportId,
-        title: 'Road Pothole Issue on Main Street',
-        description: 'There is a large pothole on Main Street that is causing damage to vehicles and creating traffic issues. The pothole has been there for several weeks and is getting worse with each passing day. Multiple vehicles have been damaged, and it poses a safety risk to commuters.',
-        category: 'road_issue',
-        status: 'in_progress',
-        priority: 'high',
-        location: 'Main Street, Block A, Near City Mall',
-        latitude: 23.3441,
-        longitude: 85.3096,
-        reportedBy: 'Test User',
-        createdAt: '2024-01-10T10:30:00Z',
-        updatedAt: '2024-01-12T14:20:00Z',
-        assignedTo: 'PWD Department',
-        estimatedCompletion: '2024-01-20',
-        images: [
-          'https://via.placeholder.com/400x300?text=Pothole+Image+1',
-          'https://via.placeholder.com/400x300?text=Pothole+Image+2'
-        ],
-        comments: [
-          {
-            id: '1',
-            text: 'Report received and acknowledged by the PWD department.',
-            createdAt: '2024-01-11T09:00:00Z',
-            createdBy: 'PWD Admin',
-            type: 'system'
-          },
-          {
-            id: '2',
-            text: 'Work has been assigned to the road maintenance team.',
-            createdAt: '2024-01-12T14:20:00Z',
-            createdBy: 'PWD Supervisor',
-            type: 'system'
-          }
-        ]
-      };
+      console.log('📋 Fetching report details for ID:', reportId);
+      const result = await reportService.getReportById(reportId);
       
-      setReport(mockReport);
+      if (result.success) {
+        const reportData = result.data;
+        
+        // Transform the data to match our UI expectations
+        const transformedReport = {
+          id: reportData._id,
+          title: reportData.title,
+          description: reportData.description,
+          category: reportData.category,
+          status: reportData.status,
+          priority: reportData.priority || 'medium',
+          location: reportData.location?.address || 'Location not specified',
+          latitude: reportData.location?.latitude,
+          longitude: reportData.location?.longitude,
+          reportedBy: reportData.reporterId?.name || reportData.reporterId || 'Anonymous',
+          createdAt: reportData.createdAt,
+          updatedAt: reportData.updatedAt,
+          assignedTo: reportData.assignedTo?.name || reportData.assignedTo || null,
+          estimatedCompletion: reportData.estimatedCompletion || null,
+          images: reportData.media || [],
+          comments: reportData.comments || [],
+          upvotes: Array.isArray(reportData.upvotes) ? reportData.upvotes.length : 0
+        };
+        
+        console.log('✅ Report details loaded:', transformedReport);
+        setReport(transformedReport);
+      } else {
+        console.error('❌ Failed to load report:', result.message);
+        showErrorAlert(new Error(result.message || 'Failed to load report details'));
+      }
     } catch (error) {
-      console.error('Error fetching report details:', error);
+      console.error('❌ Error fetching report details:', error);
+      showErrorAlert(error, 'Failed to Load Report');
     } finally {
       setLoading(false);
     }

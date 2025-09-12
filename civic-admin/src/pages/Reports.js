@@ -26,6 +26,7 @@ import {
 } from '@mui/material';
 import { Visibility, Assignment, Edit } from '@mui/icons-material';
 import axios from 'axios';
+import { getStatusColor, getStatusLabel } from '../constants/reportStatus';
 
 const API_BASE_URL = 'http://localhost:5000/api';
 
@@ -76,18 +77,7 @@ const Reports = () => {
     }
   };
 
-  const getStatusColor = (status) => {
-    const colors = {
-      submitted: 'info',
-      acknowledged: 'info',
-      assigned: 'warning',
-      in_progress: 'warning',
-      resolved: 'success',
-      rejected: 'error',
-      closed: 'default'
-    };
-    return colors[status] || 'default';
-  };
+  // Status functions are now imported from centralized config
 
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
@@ -140,9 +130,23 @@ const Reports = () => {
                   </TableCell>
                   <TableCell>
                     <Chip
-                      label={report.status}
+                      label={getStatusLabel(report.status)}
                       color={getStatusColor(report.status)}
                       size="small"
+                      sx={{
+                        minWidth: '100px',
+                        height: '24px',
+                        fontSize: '12px',
+                        fontWeight: 500,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        '& .MuiChip-label': {
+                          paddingLeft: '8px',
+                          paddingRight: '8px',
+                          lineHeight: '1.2'
+                        }
+                      }}
                     />
                   </TableCell>
                   <TableCell>{report.assignedTo?.name || '-'}</TableCell>

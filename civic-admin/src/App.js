@@ -9,6 +9,7 @@ import Dashboard from './pages/Dashboard';
 import Reports from './pages/Reports';
 import Users from './pages/Users';
 import Analytics from './pages/Analytics';
+import Profile from './pages/Profile';
 import PrivateRoute from './components/PrivateRoute';
 
 const theme = createTheme({
@@ -36,6 +37,7 @@ function App() {
               <Route path="reports" element={<Reports />} />
               <Route path="users" element={<Users />} />
               <Route path="analytics" element={<Analytics />} />
+              <Route path="profile" element={<Profile />} />
             </Route>
           </Routes>
         </Router>

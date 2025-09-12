@@ -9,12 +9,15 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { REPORT_STATUS } from '../../constants/config';
+import { getStatusColor, getStatusLabel } from '../../constants/reportStatus';
+import reportService from '../../services/reportService';
+import { showErrorAlert } from '../../utils/errorHandler';
 
 const MyReportsScreen = ({ navigation }) => {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchReports();
@@ -22,29 +25,37 @@ const MyReportsScreen = ({ navigation }) => {
 
   const fetchReports = async () => {
     try {
-      // Mock data for now
-      const mockReports = [
-        {
-          id: '1',
-          title: 'Road Pothole Issue',
-          category: 'road_issue',
-          status: 'in_progress',
-          createdAt: '2024-01-10',
-          location: 'Main Street, Block A'
-        },
-        {
-          id: '2',
-          title: 'Street Light Not Working',
-          category: 'street_light',
-          status: 'acknowledged',
-          createdAt: '2024-01-08',
-          location: 'Park Avenue, Block B'
-        }
-      ];
+      setError(null);
+      const result = await reportService.getMyReports();
       
-      setReports(mockReports);
+      if (result.success) {
+        // Transform the data to match our UI expectations
+        const transformedReports = result.data.map(report => ({
+          id: report._id,
+          title: report.title,
+          category: report.category,
+          status: report.status,
+          createdAt: new Date(report.createdAt).toLocaleDateString(),
+          location: report.location?.address || 'Location not specified',
+          description: report.description,
+          media: report.media || [],
+          upvotes: Array.isArray(report.upvotes) ? report.upvotes.length : 0,
+          comments: Array.isArray(report.comments) ? report.comments.length : 0
+        }));
+        
+        setReports(transformedReports);
+      } else {
+        console.error('Failed to fetch reports:', result.message);
+        setError(result.message || 'Failed to fetch reports');
+        setReports([]);
+      }
     } catch (error) {
       console.error('Error fetching reports:', error);
+      const errorMessage = error?.message?.includes('Network Error') 
+        ? 'No internet connection. Please check your network and try again.'
+        : 'Failed to load reports. Please try again.';
+      setError(errorMessage);
+      setReports([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -56,13 +67,7 @@ const MyReportsScreen = ({ navigation }) => {
     fetchReports();
   };
 
-  const getStatusColor = (status) => {
-    return REPORT_STATUS[status]?.color || '#666';
-  };
-
-  const getStatusLabel = (status) => {
-    return REPORT_STATUS[status]?.label || status;
-  };
+  // Status functions are now imported from centralized config
 
   const getCategoryIcon = (category) => {
     const iconMap = {
@@ -113,19 +118,44 @@ const MyReportsScreen = ({ navigation }) => {
     </TouchableOpacity>
   );
 
-  const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <MaterialCommunityIcons
-        name="file-document-outline"
-        size={64}
-        color="#ccc"
-      />
-      <Text style={styles.emptyStateText}>No reports found</Text>
-      <Text style={styles.emptyStateSubtext}>
-        Tap the + button to create your first report
-      </Text>
-    </View>
-  );
+  const renderEmptyState = () => {
+    if (error) {
+      return (
+        <View style={styles.emptyState}>
+          <MaterialCommunityIcons
+            name="wifi-off"
+            size={64}
+            color="#F44336"
+          />
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity 
+            style={styles.retryButton}
+            onPress={() => {
+              setLoading(true);
+              fetchReports();
+            }}
+          >
+            <MaterialCommunityIcons name="refresh" size={20} color="#2196F3" />
+            <Text style={styles.retryButtonText}>Try Again</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.emptyState}>
+        <MaterialCommunityIcons
+          name="file-document-outline"
+          size={64}
+          color="#ccc"
+        />
+        <Text style={styles.emptyStateText}>No reports found</Text>
+        <Text style={styles.emptyStateSubtext}>
+          Tap the + button to create your first report
+        </Text>
+      </View>
+    );
+  };
 
   if (loading) {
     return (
@@ -253,6 +283,31 @@ const styles = StyleSheet.create({
     color: '#999',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#F44336',
+    textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 20,
+    marginHorizontal: 32,
+    lineHeight: 22,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e3f2fd',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#2196F3',
+  },
+  retryButtonText: {
+    color: '#2196F3',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
   },
 });
 

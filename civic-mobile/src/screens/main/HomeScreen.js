@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -22,6 +23,13 @@ const HomeScreen = ({ navigation }) => {
   useEffect(() => {
     fetchReports();
   }, [selectedCategory]);
+
+  // Refresh data when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchReports();
+    }, [selectedCategory])
+  );
 
   const fetchReports = async () => {
     setLoading(true);

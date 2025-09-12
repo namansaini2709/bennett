@@ -140,6 +140,13 @@ const Layout = () => {
                 {user?.name}
               </MenuItem>
               <Divider />
+              <MenuItem onClick={() => { 
+                handleProfileMenuClose(); 
+                navigate('/profile'); 
+              }}>
+                <Person sx={{ mr: 1 }} />
+                Profile
+              </MenuItem>
               <MenuItem onClick={handleLogout}>
                 <Logout sx={{ mr: 1 }} />
                 Logout

@@ -48,8 +48,11 @@ export const AuthProvider = ({ children }) => {
 
       localStorage.setItem('adminToken', token);
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      
+      // Set token first, then user - this triggers the useEffect properly
       setToken(token);
       setUser(user);
+      setLoading(false); // Ensure loading is false after successful login
 
       return { success: true };
     } catch (error) {

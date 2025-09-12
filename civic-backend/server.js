@@ -14,7 +14,13 @@ const app = express();
 
 app.use(helmet());
 app.use(cors({
-  origin: [process.env.CLIENT_URL, process.env.ADMIN_URL, process.env.MOBILE_URL, 'http://localhost:8082'],
+  origin: [
+    process.env.CLIENT_URL, 
+    process.env.ADMIN_URL, 
+    process.env.MOBILE_URL, 
+    'http://localhost:8081', 
+    'http://localhost:8082'
+  ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
