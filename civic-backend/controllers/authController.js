@@ -13,7 +13,7 @@ exports.register = async (req, res) => {
       });
     }
 
-    const { name, email, phone, password, address, language } = req.body;
+    const { name, email, phone, password, address, language, role, department } = req.body;
 
     const userExists = await User.findOne({
       $or: [{ email }, { phone }]
@@ -35,6 +35,8 @@ exports.register = async (req, res) => {
       password,
       address,
       language: language || 'en',
+      role: role || 'citizen',
+      department,
       verificationToken
     });
 

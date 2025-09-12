@@ -13,9 +13,9 @@
       "supportsTablet": true
     },
     "android": {
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.anonymous.civicmobile"
     },
-    "web": {
-    }
+    "web": {}
   }
 }

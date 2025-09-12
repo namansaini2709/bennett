@@ -9,6 +9,7 @@ import {
   Alert
 } from 'react-native';
 import { TextInput, Button, Card } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 
 const LoginScreen = ({ navigation }) => {
@@ -16,12 +17,15 @@ const LoginScreen = ({ navigation }) => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
   
   const { login } = useAuth();
 
   const handleLogin = async () => {
+    setError(''); // Clear previous errors
+    
     if (!emailOrPhone || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      setError('Please fill in all fields');
       return;
     }
 
@@ -30,8 +34,12 @@ const LoginScreen = ({ navigation }) => {
     setLoading(false);
 
     if (!result.success) {
-      Alert.alert('Login Failed', result.message);
+      setError(result.message || 'Login failed. Please try again.');
     }
+  };
+
+  const clearError = () => {
+    if (error) setError('');
   };
 
   return (
@@ -47,10 +55,20 @@ const LoginScreen = ({ navigation }) => {
               <Text style={styles.subtitle}>Report civic issues in Jharkhand</Text>
             </View>
 
+            {error ? (
+              <View style={styles.errorContainer}>
+                <MaterialCommunityIcons name="alert-circle" size={22} color="#FF5252" />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
+
             <TextInput
               label="Email or Phone"
               value={emailOrPhone}
-              onChangeText={setEmailOrPhone}
+              onChangeText={(text) => {
+                setEmailOrPhone(text);
+                clearError();
+              }}
               mode="outlined"
               style={styles.input}
               keyboardType="email-address"
@@ -60,7 +78,10 @@ const LoginScreen = ({ navigation }) => {
             <TextInput
               label="Password"
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(text) => {
+                setPassword(text);
+                clearError();
+              }}
               mode="outlined"
               style={styles.input}
               secureTextEntry={!showPassword}
@@ -99,40 +120,68 @@ const LoginScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#121212',
+    minHeight: '100vh',
   },
   scrollContainer: {
     flexGrow: 1,
+    minHeight: '100vh',
     justifyContent: 'center',
     padding: 20,
+    paddingVertical: 40,
   },
   card: {
-    elevation: 4,
+    elevation: 8,
+    borderRadius: 16,
+    backgroundColor: '#1E1E1E',
   },
   header: {
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 32,
   },
   title: {
-    fontSize: 24,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#2196F3',
-    marginBottom: 5,
+    color: '#FFFFFF',
+    marginBottom: 8,
   },
   subtitle: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 18,
+    color: '#B0B0B0',
+    fontWeight: '400',
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2D1B1B',
+    borderColor: '#FF5252',
+    borderWidth: 1.5,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+  },
+  errorText: {
+    color: '#FF8A80',
+    fontSize: 15,
+    fontWeight: '500',
+    marginLeft: 10,
+    flex: 1,
+    lineHeight: 20,
   },
   input: {
-    marginBottom: 15,
+    marginBottom: 18,
+    backgroundColor: '#2A2A2A',
   },
   button: {
-    marginTop: 10,
-    marginBottom: 10,
-    paddingVertical: 5,
+    marginTop: 24,
+    marginBottom: 20,
+    paddingVertical: 12,
+    backgroundColor: '#4CAF50',
+    borderRadius: 12,
+    elevation: 3,
   },
   linkButton: {
-    marginTop: 10,
+    marginTop: 12,
   },
 });
 

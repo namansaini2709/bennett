@@ -61,7 +61,7 @@ const HomeScreen = ({ navigation }) => {
   };
 
   const renderReport = ({ item }) => {
-    const status = REPORT_STATUS[item.status];
+    const status = REPORT_STATUS[item.status] || { label: 'Unknown', color: '#999' };
     
     return (
       <TouchableOpacity
@@ -77,10 +77,10 @@ const HomeScreen = ({ navigation }) => {
               />
               <View style={styles.reportInfo}>
                 <Text style={styles.reportTitle} numberOfLines={1}>
-                  {item.title}
+                  {item.title || 'Untitled Report'}
                 </Text>
                 <Text style={styles.reportLocation} numberOfLines={1}>
-                  {item.location.address}
+                  {item.location?.address || 'Location not specified'}
                 </Text>
               </View>
               <Chip
@@ -91,7 +91,7 @@ const HomeScreen = ({ navigation }) => {
               </Chip>
             </View>
             <Text style={styles.reportDescription} numberOfLines={2}>
-              {item.description}
+              {item.description || 'No description provided'}
             </Text>
             <View style={styles.reportFooter}>
               <Text style={styles.reportDate}>
@@ -111,8 +111,8 @@ const HomeScreen = ({ navigation }) => {
   };
 
   const filteredReports = reports.filter(report =>
-    report.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    report.description.toLowerCase().includes(searchQuery.toLowerCase())
+    (report.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (report.description || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
