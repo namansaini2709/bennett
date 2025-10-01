@@ -10,7 +10,7 @@ const API_BASE_URL = 'http://localhost:5000/api';
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState(localStorage.getItem('adminToken'));
+  const [token, setToken] = useState(localStorage.getItem('token'));
 
   useEffect(() => {
     if (token) {
@@ -46,9 +46,10 @@ export const AuthProvider = ({ children }) => {
         throw new Error('Unauthorized access');
       }
 
-      localStorage.setItem('adminToken', token);
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      
+
       // Set token first, then user - this triggers the useEffect properly
       setToken(token);
       setUser(user);
@@ -64,6 +65,8 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
     localStorage.removeItem('adminToken');
     delete axios.defaults.headers.common['Authorization'];
     setToken(null);

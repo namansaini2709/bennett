@@ -7,15 +7,23 @@ import {
   Button,
   Typography,
   Box,
-  Alert
+  Alert,
+  IconButton,
+  InputAdornment
 } from '@mui/material';
+import { Visibility, VisibilityOff } from '@mui/icons-material';
+import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
+
+const MotionPaper = motion(Paper);
+const MotionButton = motion(Button);
 
 const Login = () => {
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
   const { login } = useAuth();
 
@@ -44,31 +52,114 @@ const Login = () => {
   };
 
   return (
-    <Container component="main" maxWidth="xs">
-      <Box
-        sx={{
-          marginTop: 8,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}
-      >
-        <Paper elevation={3} sx={{ padding: 4, width: '100%' }}>
-          <Typography component="h1" variant="h4" align="center" gutterBottom>
-            Civic Setu Admin
-          </Typography>
-          <Typography component="h2" variant="h6" align="center" color="text.secondary" gutterBottom>
-            Sign in to continue
-          </Typography>
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        position: 'relative',
+        overflow: 'hidden',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: '-50%',
+          right: '-50%',
+          width: '200%',
+          height: '200%',
+          background: 'radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px)',
+          backgroundSize: '50px 50px',
+          animation: 'drift 20s infinite linear',
+        },
+      }}
+    >
+      <style>
+        {`
+          @keyframes drift {
+            from { transform: translate(0, 0); }
+            to { transform: translate(-50px, -50px); }
+          }
+          @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+          }
+        `}
+      </style>
+      <Container component="main" maxWidth="xs" sx={{ position: 'relative', zIndex: 1 }}>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5 }}
+        >
+          <MotionPaper
+            elevation={24}
+            sx={{
+              padding: 4,
+              width: '100%',
+              background: 'rgba(255, 255, 255, 0.98)',
+              backdropFilter: 'blur(10px)',
+              borderRadius: 4,
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+              '& .MuiInputBase-root': {
+                color: '#1e293b',
+              },
+              '& .MuiInputLabel-root': {
+                color: '#64748b',
+              },
+              '& .MuiOutlinedInput-notchedOutline': {
+                borderColor: '#e2e8f0',
+              },
+              '& .MuiIconButton-root': {
+                color: '#64748b',
+              },
+            }}
+            whileHover={{ y: -5 }}
+            transition={{ duration: 0.3 }}
+          >
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.5 }}
+          >
+            <Typography
+              component="h1"
+              variant="h4"
+              align="center"
+              gutterBottom
+              sx={{
+                fontWeight: 700,
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+              }}
+            >
+              Civic Setu Admin
+            </Typography>
+            <Typography component="h2" variant="h6" align="center" color="text.secondary" gutterBottom>
+              Sign in to continue
+            </Typography>
+          </motion.div>
           
           {error && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              {error}
-            </Alert>
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Alert severity="error" sx={{ mt: 2 }}>
+                {error}
+              </Alert>
+            </motion.div>
           )}
           
           <Box component="form" onSubmit={handleSubmit} sx={{ mt: 3 }}>
-            <TextField
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.3, duration: 0.5 }}
+            >
+              <TextField
               margin="normal"
               required
               fullWidth
@@ -79,32 +170,70 @@ const Login = () => {
               autoFocus
               value={emailOrPhone}
               onChange={(e) => setEmailOrPhone(e.target.value)}
-            />
-            <TextField
+              />
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.4, duration: 0.5 }}
+            >
+              <TextField
               margin="normal"
               required
               fullWidth
               name="password"
               label="Password"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               id="password"
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-            />
-            <Button
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      aria-label="toggle password visibility"
+                      onClick={() => setShowPassword(!showPassword)}
+                      edge="end"
+                    >
+                      {showPassword ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+              />
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5, duration: 0.5 }}
+            >
+              <MotionButton
               type="submit"
               fullWidth
               variant="contained"
-              sx={{ mt: 3, mb: 2 }}
               disabled={loading}
-            >
-              {loading ? 'Signing in...' : 'Sign In'}
-            </Button>
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              sx={{
+                mt: 3,
+                mb: 2,
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: 'white',
+                fontWeight: 600,
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #764ba2 0%, #667eea 100%)',
+                },
+              }}
+              >
+                {loading ? 'Signing in...' : 'Sign In'}
+              </MotionButton>
+            </motion.div>
           </Box>
-        </Paper>
-      </Box>
-    </Container>
+          </MotionPaper>
+        </motion.div>
+      </Container>
+    </Box>
   );
 };
 

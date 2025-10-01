@@ -1,0 +1,10 @@
+# Environment files
+civic-backend/.env
+civic-admin/.env
+civic-mobile/.env
+
+# Node dependencies
+**/node_modules/
+
+# Logs
+*.log

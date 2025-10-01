@@ -1,0 +1,354 @@
+/**
+ * Map Clustering Custom Styles
+ *
+ * Custom styling for marker clusters and spiderfy functionality
+ * Ensures visual consistency with dashboard theme and accessibility
+ */
+
+/* ======================
+   CLUSTER MARKERS
+   ====================== */
+
+.custom-cluster-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+.cluster-marker {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+.cluster-marker:hover {
+  transform: scale(1.1) !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35) !important;
+  z-index: 1000 !important;
+}
+
+.cluster-marker:active {
+  transform: scale(0.95) !important;
+}
+
+/* Focus styles for keyboard navigation (accessibility) */
+.cluster-marker:focus,
+.cluster-marker:focus-visible {
+  outline: 3px solid #6366f1;
+  outline-offset: 4px;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2);
+}
+
+/* Cluster size variants */
+.cluster-marker-small {
+  animation: clusterPulse 2s ease-in-out infinite;
+}
+
+.cluster-marker-medium {
+  animation: clusterPulse 2.5s ease-in-out infinite;
+}
+
+.cluster-marker-large {
+  animation: clusterPulse 3s ease-in-out infinite;
+}
+
+@keyframes clusterPulse {
+  0%, 100% {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  }
+  50% {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  }
+}
+
+/* ======================
+   SPIDERFY LEGS
+   ====================== */
+
+/* Custom styling for spiderfy polylines */
+.leaflet-cluster-spider-leg {
+  stroke: #6366f1 !important;
+  stroke-width: 2 !important;
+  stroke-opacity: 0.6 !important;
+  fill: none !important;
+  pointer-events: none;
+  transition: stroke-width 0.2s ease, stroke-opacity 0.2s ease;
+}
+
+.leaflet-cluster-spider-leg:hover {
+  stroke-width: 3 !important;
+  stroke-opacity: 0.8 !important;
+}
+
+/* ======================
+   SPIDERFIED MARKERS
+   ====================== */
+
+/* Markers in spiderfied state */
+.marker-cluster-spiderfied .custom-marker {
+  animation: spiderMarkerAppear 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  z-index: 999 !important;
+}
+
+@keyframes spiderMarkerAppear {
+  0% {
+    transform: scale(0) rotate(-45deg);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1) rotate(-45deg);
+    opacity: 1;
+  }
+}
+
+/* Enhanced hit area for spiderfied markers (touch-friendly) */
+.marker-cluster-spiderfied .leaflet-marker-icon {
+  min-width: 44px !important;
+  min-height: 44px !important;
+  cursor: pointer;
+}
+
+/* ======================
+   CLUSTER COVERAGE POLYGON
+   ====================== */
+
+/* Polygon shown on hover (if enabled) */
+.leaflet-cluster-polygon {
+  fill: #6366f1 !important;
+  fill-opacity: 0.1 !important;
+  stroke: #4f46e5 !important;
+  stroke-width: 2 !important;
+  stroke-opacity: 0.4 !important;
+  pointer-events: none;
+  transition: all 0.3s ease;
+}
+
+/* ======================
+   CLUSTER ANIMATIONS
+   ====================== */
+
+/* Cluster zoom-in animation */
+.leaflet-cluster-anim .leaflet-marker-icon,
+.leaflet-cluster-anim .leaflet-marker-shadow {
+  transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+}
+
+.leaflet-cluster-anim-entering {
+  animation: clusterZoomIn 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+@keyframes clusterZoomIn {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Cluster zoom-out animation */
+.leaflet-cluster-anim-exiting {
+  animation: clusterZoomOut 0.2s ease-in;
+}
+
+@keyframes clusterZoomOut {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0);
+    opacity: 0;
+  }
+}
+
+/* ======================
+   RESPONSIVE & MOBILE
+   ====================== */
+
+/* Larger touch targets on mobile */
+@media (max-width: 768px) {
+  .cluster-marker {
+    min-width: 48px !important;
+    min-height: 48px !important;
+  }
+
+  .marker-cluster-spiderfied .leaflet-marker-icon {
+    min-width: 48px !important;
+    min-height: 48px !important;
+  }
+
+  /* Thicker spider legs on mobile for visibility */
+  .leaflet-cluster-spider-leg {
+    stroke-width: 3 !important;
+  }
+}
+
+/* ======================
+   HIGH CONTRAST MODE
+   ====================== */
+
+/* Enhanced contrast for accessibility */
+@media (prefers-contrast: high) {
+  .cluster-marker {
+    border-width: 4px !important;
+  }
+
+  .leaflet-cluster-spider-leg {
+    stroke-width: 3 !important;
+    stroke-opacity: 1 !important;
+  }
+
+  .cluster-marker:focus,
+  .cluster-marker:focus-visible {
+    outline-width: 4px;
+  }
+}
+
+/* ======================
+   REDUCED MOTION
+   ====================== */
+
+/* Respect user's motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .cluster-marker,
+  .cluster-marker:hover,
+  .marker-cluster-spiderfied .custom-marker,
+  .leaflet-cluster-anim .leaflet-marker-icon,
+  .leaflet-cluster-anim .leaflet-marker-shadow,
+  .leaflet-cluster-spider-leg {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .cluster-marker:hover {
+    transform: scale(1.05) !important;
+  }
+}
+
+/* ======================
+   DARK MODE SUPPORT
+   ====================== */
+
+/* Adjust for dark backgrounds */
+@media (prefers-color-scheme: dark) {
+  .cluster-marker {
+    border-color: rgba(255, 255, 255, 0.9) !important;
+  }
+
+  .leaflet-cluster-spider-leg {
+    stroke: #818cf8 !important;
+  }
+
+  .cluster-marker:focus,
+  .cluster-marker:focus-visible {
+    outline-color: #818cf8;
+    box-shadow: 0 0 0 4px rgba(129, 140, 248, 0.3);
+  }
+}
+
+/* ======================
+   PRINT STYLES
+   ====================== */
+
+@media print {
+  /* Remove animations and fancy effects for printing */
+  .cluster-marker,
+  .marker-cluster-spiderfied .custom-marker {
+    animation: none !important;
+  }
+
+  .cluster-marker:hover {
+    transform: none !important;
+  }
+
+  /* Show all markers, hide clusters when printing */
+  .leaflet-cluster-spider-leg {
+    display: none;
+  }
+}
+
+/* ======================
+   LOADING STATE
+   ====================== */
+
+/* Show loading indicator for chunked loading */
+.leaflet-cluster-loading {
+  position: relative;
+}
+
+.leaflet-cluster-loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  border: 3px solid rgba(99, 102, 241, 0.3);
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: clusterLoadingSpin 0.8s linear infinite;
+}
+
+@keyframes clusterLoadingSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ======================
+   Z-INDEX MANAGEMENT
+   ====================== */
+
+/* Ensure proper stacking order */
+.leaflet-pane.leaflet-marker-pane {
+  z-index: 600;
+}
+
+.leaflet-pane.leaflet-shadow-pane {
+  z-index: 500;
+}
+
+.marker-cluster-spiderfied {
+  z-index: 999 !important;
+}
+
+/* Selected marker should be on top */
+.leaflet-marker-icon.marker-selected {
+  z-index: 1000 !important;
+}
+
+/* ======================
+   TOOLTIP STYLING
+   ====================== */
+
+/* Custom tooltip for cluster info */
+.cluster-tooltip {
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* ======================
+   PERFORMANCE OPTIMIZATIONS
+   ====================== */
+
+/* Use GPU acceleration for animations */
+.cluster-marker,
+.marker-cluster-spiderfied .custom-marker,
+.leaflet-cluster-spider-leg {
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}

@@ -3,12 +3,17 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 
 import HomeScreen from '../screens/main/HomeScreen';
 import CreateReportScreen from '../screens/main/CreateReportScreen';
 import MyReportsScreen from '../screens/main/MyReportsScreen';
+import AllReportsScreen from '../screens/main/AllReportsScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
 import ReportDetailScreen from '../screens/main/ReportDetailScreen';
+import EditProfileScreen from '../screens/main/EditProfileScreen';
+import NotificationSettingsScreen from '../screens/main/NotificationSettingsScreen';
+import LanguageSelectionScreen from '../screens/main/LanguageSelectionScreen';
 
 // Staff screens
 import DashboardScreen from '../screens/staff/DashboardScreen';
@@ -21,16 +26,11 @@ const HomeStack = () => {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: {
-          backgroundColor: '#2196F3',
-        },
-        headerTintColor: '#fff',
-        headerTitleStyle: {
-          fontWeight: 'bold',
-        },
+        headerShown: false,
       }}
     >
-      <Stack.Screen name="HomeList" component={HomeScreen} options={{ title: 'Civic Setu' }} />
+      <Stack.Screen name="HomeList" component={HomeScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="AllReports" component={AllReportsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ReportDetail" component={ReportDetailScreen} options={{ title: 'Report Details' }} />
     </Stack.Navigator>
   );
@@ -40,16 +40,10 @@ const MyReportsStack = () => {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: {
-          backgroundColor: '#2196F3',
-        },
-        headerTintColor: '#fff',
-        headerTitleStyle: {
-          fontWeight: 'bold',
-        },
+        headerShown: false,
       }}
     >
-      <Stack.Screen name="MyReportsList" component={MyReportsScreen} options={{ title: 'My Reports' }} />
+      <Stack.Screen name="MyReportsList" component={MyReportsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ReportDetail" component={ReportDetailScreen} options={{ title: 'Report Details' }} />
     </Stack.Navigator>
   );
@@ -57,6 +51,8 @@ const MyReportsStack = () => {
 
 // Staff Tab Navigator
 const StaffTabNavigator = () => {
+  const { theme } = useTheme();
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -73,16 +69,13 @@ const StaffTabNavigator = () => {
 
           return <MaterialCommunityIcons name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: '#2196F3',
-        tabBarInactiveTintColor: 'gray',
-        headerShown: true,
-        headerStyle: {
-          backgroundColor: '#2196F3',
+        tabBarActiveTintColor: theme.colors.primary.main,
+        tabBarInactiveTintColor: theme.colors.text.tertiary,
+        tabBarStyle: {
+          backgroundColor: theme.colors.surface.primary,
+          borderTopColor: theme.colors.border.primary,
         },
-        headerTintColor: '#fff',
-        headerTitleStyle: {
-          fontWeight: 'bold',
-        },
+        headerShown: false,
       })}
     >
       <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'Admin Dashboard' }} />
@@ -94,6 +87,8 @@ const StaffTabNavigator = () => {
 
 // Citizen Tab Navigator
 const CitizenTabNavigator = () => {
+  const { theme } = useTheme();
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -112,8 +107,12 @@ const CitizenTabNavigator = () => {
 
           return <MaterialCommunityIcons name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: '#2196F3',
-        tabBarInactiveTintColor: 'gray',
+        tabBarActiveTintColor: theme.colors.primary.main,
+        tabBarInactiveTintColor: theme.colors.text.tertiary,
+        tabBarStyle: {
+          backgroundColor: theme.colors.surface.primary,
+          borderTopColor: theme.colors.border.primary,
+        },
         headerShown: false,
       })}
     >
@@ -127,7 +126,8 @@ const CitizenTabNavigator = () => {
 
 const MainNavigator = () => {
   const { user } = useAuth();
-  
+  const { theme } = useTheme();
+
   // Check if user is staff/admin/supervisor
   const isStaff = user?.role && ['staff', 'supervisor', 'admin'].includes(user.role);
 
@@ -138,7 +138,7 @@ const MainNavigator = () => {
       ) : (
         <Stack.Screen name="CitizenTabs" component={CitizenTabNavigator} />
       )}
-      
+
       {/* Modal Screens available to all users */}
       <Stack.Screen
         name="ReportDetail"
@@ -146,8 +146,32 @@ const MainNavigator = () => {
         options={{
           headerShown: true,
           title: 'Report Details',
-          headerStyle: { backgroundColor: '#2196F3' },
-          headerTintColor: '#fff',
+          headerStyle: { backgroundColor: theme.colors.primary.main },
+          headerTintColor: theme.colors.text.contrast,
+          presentation: 'modal',
+        }}
+      />
+      <Stack.Screen
+        name="EditProfile"
+        component={EditProfileScreen}
+        options={{
+          headerShown: false,
+          presentation: 'modal',
+        }}
+      />
+      <Stack.Screen
+        name="NotificationSettings"
+        component={NotificationSettingsScreen}
+        options={{
+          headerShown: false,
+          presentation: 'modal',
+        }}
+      />
+      <Stack.Screen
+        name="LanguageSelection"
+        component={LanguageSelectionScreen}
+        options={{
+          headerShown: false,
           presentation: 'modal',
         }}
       />

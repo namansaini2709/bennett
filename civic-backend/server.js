@@ -15,11 +15,15 @@ const app = express();
 app.use(helmet());
 app.use(cors({
   origin: [
-    process.env.CLIENT_URL, 
-    process.env.ADMIN_URL, 
-    process.env.MOBILE_URL, 
-    'http://localhost:8081', 
-    'http://localhost:8082'
+    process.env.CLIENT_URL,
+    process.env.ADMIN_URL,
+    process.env.MOBILE_URL,
+    'http://localhost:3001',
+    'http://localhost:8081',
+    'http://localhost:8082',
+    'http://localhost:8086',
+    'http://192.168.1.11:3001',
+    'http://192.168.1.11:5000'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -32,8 +36,8 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 app.use(morgan('dev'));
 
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
+  windowMs: 1 * 60 * 1000,
+  max: 1000,
   message: 'Too many requests from this IP, please try again later.'
 });
 app.use('/api/', limiter);
@@ -77,14 +81,12 @@ app.use((req, res) => {
 const PORT = process.env.PORT || 5000;
 
 mongoose
-  .connect(process.env.MONGODB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-  })
+  .connect(process.env.MONGODB_URI)
   .then(() => {
     console.log('MongoDB connected successfully');
-    app.listen(PORT, '0.0.0.0', () => {
+    app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
+      console.log(`Server accessible at http://localhost:${PORT}`);
       console.log(`Server accessible at http://192.168.1.11:${PORT}`);
       console.log(`Environment: ${process.env.NODE_ENV}`);
     });

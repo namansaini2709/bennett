@@ -40,8 +40,8 @@ exports.register = async (req, res) => {
       verificationToken
     });
 
-    const token = generateToken(user._id);
-    const refreshToken = generateRefreshToken(user._id);
+    const token = generateToken(user._id, user.role, user.department);
+    const refreshToken = generateRefreshToken(user._id, user.role, user.department);
 
     res.status(201).json({
       success: true,
@@ -104,8 +104,8 @@ exports.login = async (req, res) => {
       });
     }
 
-    const token = generateToken(user._id);
-    const refreshToken = generateRefreshToken(user._id);
+    const token = generateToken(user._id, user.role, user.department);
+    const refreshToken = generateRefreshToken(user._id, user.role, user.department);
 
     user.password = undefined;
 
@@ -234,7 +234,7 @@ exports.updatePassword = async (req, res) => {
     user.password = newPassword;
     await user.save();
 
-    const token = generateToken(user._id);
+    const token = generateToken(user._id, user.role, user.department);
 
     res.status(200).json({
       success: true,
@@ -312,7 +312,7 @@ exports.resetPassword = async (req, res) => {
     user.resetPasswordExpire = undefined;
     await user.save();
 
-    const token = generateToken(user._id);
+    const token = generateToken(user._id, user.role, user.department);
 
     res.status(200).json({
       success: true,
@@ -381,8 +381,8 @@ exports.refreshToken = async (req, res) => {
       });
     }
 
-    const newToken = generateToken(user._id);
-    const newRefreshToken = generateRefreshToken(user._id);
+    const newToken = generateToken(user._id, user.role, user.department);
+    const newRefreshToken = generateRefreshToken(user._id, user.role, user.department);
 
     res.status(200).json({
       success: true,

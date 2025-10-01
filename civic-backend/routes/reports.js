@@ -22,7 +22,7 @@ router.get('/:id', optionalAuth, reportController.getReportById);
 
 router.post('/', protect, upload.array('media', 5), validateReport, reportController.createReport);
 router.put('/:id', protect, reportController.updateReport);
-router.delete('/:id', protect, reportController.deleteReport);
+router.delete('/:id', protect, authorize('admin'), reportController.deleteReport);
 
 router.patch('/:id/status', protect, authorize('staff', 'supervisor', 'admin'), reportController.updateReportStatus);
 router.post('/:id/assign', protect, authorize('supervisor', 'admin'), reportController.assignReport);

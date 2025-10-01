@@ -1,47 +1,31 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { View, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Provider as PaperProvider } from 'react-native-paper';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-// Import components with try-catch handling
-let AuthNavigator, MainNavigator, AuthProvider;
+let AuthNavigator, MainNavigator, AuthProvider, useAuth, ThemeProvider;
 
 try {
   AuthNavigator = require('./src/navigation/AuthNavigator').default;
   MainNavigator = require('./src/navigation/MainNavigator').default;
   const AuthModule = require('./src/context/AuthContext');
   AuthProvider = AuthModule.AuthProvider;
+  useAuth = AuthModule.useAuth;
+  const ThemeModule = require('./src/context/ThemeContext');
+  ThemeProvider = ThemeModule.ThemeProvider;
 } catch (error) {
   console.error('Error importing components:', error);
 }
 
 const Stack = createStackNavigator();
 
-export default function App() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [userToken, setUserToken] = useState(null);
-  const [error, setError] = useState(null);
+const AppNavigator = () => {
+  const { user, loading } = useAuth();
 
-  useEffect(() => {
-    checkAuthStatus();
-  }, []);
-
-  const checkAuthStatus = async () => {
-    try {
-      const token = await AsyncStorage.getItem('userToken');
-      setUserToken(token);
-    } catch (error) {
-      console.error('Error checking auth status:', error);
-      setError('Failed to check authentication status');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  if (isLoading) {
+  if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <Text>Loading CIVIC SETU...</Text>
@@ -49,37 +33,48 @@ export default function App() {
     );
   }
 
-  if (error || !AuthNavigator || !MainNavigator || !AuthProvider) {
+  return (
+    <NavigationContainer>
+      <StatusBar style="auto" />
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {user ? (
+          <Stack.Screen name="Main" component={MainNavigator} />
+        ) : (
+          <Stack.Screen name="Auth" component={AuthNavigator} />
+        )}
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+};
+
+export default function App() {
+  if (!AuthNavigator || !MainNavigator || !AuthProvider || !useAuth || !ThemeProvider) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
         <StatusBar style="auto" />
         <Text style={{ fontSize: 18, marginBottom: 10 }}>CIVIC SETU</Text>
         <Text style={{ textAlign: 'center', marginBottom: 20 }}>
-          {error || 'Error loading application components. Please restart the app.'}
+          Error loading application components. Please restart the app.
         </Text>
-        {!AuthNavigator && <Text style={{ color: 'red', marginBottom: 5 }}>• AuthNavigator failed to load</Text>}
-        {!MainNavigator && <Text style={{ color: 'red', marginBottom: 5 }}>• MainNavigator failed to load</Text>}
-        {!AuthProvider && <Text style={{ color: 'red', marginBottom: 5 }}>• AuthProvider failed to load</Text>}
+        {!AuthNavigator ? <Text style={{ color: 'red', marginBottom: 5 }}>• AuthNavigator failed to load</Text> : null}
+        {!MainNavigator ? <Text style={{ color: 'red', marginBottom: 5 }}>• MainNavigator failed to load</Text> : null}
+        {!AuthProvider ? <Text style={{ color: 'red', marginBottom: 5 }}>• AuthProvider failed to load</Text> : null}
+        {!ThemeProvider ? <Text style={{ color: 'red', marginBottom: 5 }}>• ThemeProvider failed to load</Text> : null}
       </View>
     );
   }
 
   try {
     return (
-      <PaperProvider>
-        <AuthProvider>
-          <NavigationContainer>
-            <StatusBar style="auto" />
-            <Stack.Navigator screenOptions={{ headerShown: false }}>
-              {userToken ? (
-                <Stack.Screen name="Main" component={MainNavigator} />
-              ) : (
-                <Stack.Screen name="Auth" component={AuthNavigator} />
-              )}
-            </Stack.Navigator>
-          </NavigationContainer>
-        </AuthProvider>
-      </PaperProvider>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <PaperProvider>
+            <AuthProvider>
+              <AppNavigator />
+            </AuthProvider>
+          </PaperProvider>
+        </ThemeProvider>
+      </SafeAreaProvider>
     );
   } catch (renderError) {
     console.error('Render error:', renderError);

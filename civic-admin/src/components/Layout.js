@@ -15,18 +15,24 @@ import {
   ListItemText,
   Avatar,
   Menu,
-  MenuItem
+  MenuItem,
+  Tooltip
 } from '@mui/material';
 import {
   Menu as MenuIcon,
   Dashboard,
   Report,
   People,
+  Group,
   Analytics,
   Logout,
-  Person
+  Person,
+  Brightness4,
+  Brightness7,
+  Business
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
+import { useThemeMode } from '../contexts/ThemeContext';
 
 const drawerWidth = 240;
 
@@ -36,6 +42,7 @@ const Layout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
+  const { mode, toggleTheme } = useThemeMode();
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -57,7 +64,9 @@ const Layout = () => {
   const menuItems = [
     { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard' },
     { text: 'Reports', icon: <Report />, path: '/reports' },
-    { text: 'Users', icon: <People />, path: '/users' },
+    { text: 'Citizens', icon: <People />, path: '/users' },
+    { text: 'Staff', icon: <Group />, path: '/staff' },
+    { text: 'Departments', icon: <Business />, path: '/departments' },
     { text: 'Analytics', icon: <Analytics />, path: '/analytics' },
   ];
 
@@ -107,7 +116,13 @@ const Layout = () => {
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             {menuItems.find(item => item.path === location.pathname)?.text || 'Admin Panel'}
           </Typography>
-          <div>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Tooltip title={`Switch to ${mode === 'light' ? 'dark' : 'light'} mode`}>
+              <IconButton onClick={toggleTheme} color="inherit">
+                {mode === 'light' ? <Brightness4 /> : <Brightness7 />}
+              </IconButton>
+            </Tooltip>
+            <div>
             <IconButton
               size="large"
               aria-label="account of current user"
@@ -152,7 +167,8 @@ const Layout = () => {
                 Logout
               </MenuItem>
             </Menu>
-          </div>
+            </div>
+          </Box>
         </Toolbar>
       </AppBar>
       <Box

@@ -8,12 +8,16 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TablePagination,
   Chip,
   Typography,
   Avatar,
   Switch,
-  FormControlLabel
+  FormControlLabel,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Button
 } from '@mui/material';
 import axios from 'axios';
 
@@ -21,37 +25,98 @@ const API_BASE_URL = 'http://localhost:5000/api';
 
 const Users = () => {
   const [users, setUsers] = useState([]);
+  const [filteredUsers, setFilteredUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [total, setTotal] = useState(0);
+
+  // Filter states
+  const [filters, setFilters] = useState({
+    department: '',
+    verified: ''
+  });
+  const [filterOptions, setFilterOptions] = useState({
+    departments: [],
+    verifiedOptions: [
+      { value: 'true', label: 'Verified' },
+      { value: 'false', label: 'Unverified' }
+    ]
+  });
 
   useEffect(() => {
-    fetchUsers();
-  }, [page, rowsPerPage]);
+    const fetchUsers = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get(`${API_BASE_URL}/users`);
+        const usersData = response.data.data || [];
 
-  const fetchUsers = async () => {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/users`, {
-        params: {
-          page: page + 1,
-          limit: rowsPerPage
-        }
-      });
-      setUsers(response.data.data);
-      setTotal(response.data.pagination.total);
-    } catch (error) {
-      console.error('Error fetching users:', error);
-    } finally {
-      setLoading(false);
+        // Filter to only show citizens
+        const citizenData = usersData.filter(user => user.role === 'citizen');
+        setUsers(citizenData);
+
+        // Extract unique filter options from citizen data
+        const departments = [...new Set(citizenData.map(u => u.department).filter(Boolean))];
+
+        setFilterOptions(prev => ({
+          ...prev,
+          departments
+        }));
+
+        // Apply current filters
+        applyFilters(citizenData);
+      } catch (error) {
+        console.error('Error fetching users:', error);
+        setUsers([]);
+        setFilteredUsers([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUsers();
+  }, []);
+
+  // Apply filters when filter values change
+  useEffect(() => {
+    applyFilters(users);
+  }, [filters, users]);
+
+  const applyFilters = (usersData) => {
+    let filtered = [...usersData];
+
+    if (filters.department) {
+      filtered = filtered.filter(user => user.department === filters.department);
     }
+    if (filters.verified) {
+      const isVerified = filters.verified === 'true';
+      filtered = filtered.filter(user => user.isVerified === isVerified);
+    }
+
+    setFilteredUsers(filtered);
+  };
+
+  const handleFilterChange = (filterType, value) => {
+    setFilters(prev => ({
+      ...prev,
+      [filterType]: value
+    }));
+  };
+
+  const clearAllFilters = () => {
+    setFilters({
+      department: '',
+      verified: ''
+    });
   };
 
   const handleStatusToggle = async (userId, currentStatus) => {
     try {
       const endpoint = currentStatus ? 'deactivate' : 'activate';
       await axios.put(`${API_BASE_URL}/users/${userId}/${endpoint}`);
-      fetchUsers();
+      // Refetch users to update the list
+      const response = await axios.get(`${API_BASE_URL}/users`);
+      const usersData = response.data.data || [];
+      const citizenData = usersData.filter(user => user.role === 'citizen');
+      setUsers(citizenData);
+      applyFilters(citizenData);
     } catch (error) {
       console.error('Error updating user status:', error);
     }
@@ -67,27 +132,72 @@ const Users = () => {
     return colors[role] || 'default';
   };
 
-  const handleChangePage = (event, newPage) => {
-    setPage(newPage);
-  };
-
-  const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-  };
-
   return (
     <Box>
       <Typography variant="h4" gutterBottom>
-        User Management
+        Citizens Management ({filteredUsers.length})
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        Showing {filteredUsers.length} of {users.length} citizens
       </Typography>
 
-      <Paper sx={{ width: '100%', overflow: 'hidden' }}>
-        <TableContainer sx={{ maxHeight: 440 }}>
+      {/* Filter Section */}
+      <Paper sx={{ p: 2, mb: 2, borderRadius: 3 }}>
+        <Box display="flex" flexWrap="wrap" gap={2} alignItems="center" sx={{ mb: 2 }}>
+          <Typography variant="h6" sx={{ mr: 2, fontWeight: 600 }}>
+            Filters:
+          </Typography>
+
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Department</InputLabel>
+            <Select
+              value={filters.department}
+              onChange={(e) => handleFilterChange('department', e.target.value)}
+              label="Department"
+            >
+              <MenuItem value="">All Departments</MenuItem>
+              {filterOptions.departments.map((department) => (
+                <MenuItem key={department} value={department}>
+                  {department}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <FormControl size="small" sx={{ minWidth: 140 }}>
+            <InputLabel>Verified</InputLabel>
+            <Select
+              value={filters.verified}
+              onChange={(e) => handleFilterChange('verified', e.target.value)}
+              label="Verified"
+            >
+              <MenuItem value="">All Citizens</MenuItem>
+              {filterOptions.verifiedOptions.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <Button
+            variant="outlined"
+            color="secondary"
+            onClick={clearAllFilters}
+            disabled={!Object.values(filters).some(filter => filter)}
+            size="small"
+          >
+            Clear Filters
+          </Button>
+        </Box>
+      </Paper>
+
+      <Paper sx={{ width: '100%', overflow: 'hidden', borderRadius: 3, height: 'calc(100vh - 300px)' }}>
+        <TableContainer sx={{ height: '100%', overflowY: 'auto' }}>
           <Table stickyHeader>
             <TableHead>
               <TableRow>
-                <TableCell>User</TableCell>
+                <TableCell>Citizen ({filteredUsers.length})</TableCell>
                 <TableCell>Email</TableCell>
                 <TableCell>Phone</TableCell>
                 <TableCell>Role</TableCell>
@@ -98,7 +208,22 @@ const Users = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {users.map((user) => (
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={8} sx={{ textAlign: 'center', py: 4 }}>
+                    <Typography>Loading citizens...</Typography>
+                  </TableCell>
+                </TableRow>
+              ) : filteredUsers.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} sx={{ textAlign: 'center', py: 4 }}>
+                    <Typography color="text.secondary">
+                      {users.length === 0 ? 'No citizens found' : 'No citizens match the selected filters'}
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredUsers.map((user) => (
                 <TableRow hover key={user._id}>
                   <TableCell>
                     <Box display="flex" alignItems="center">
@@ -141,19 +266,11 @@ const Users = () => {
                     {new Date(user.createdAt).toLocaleDateString()}
                   </TableCell>
                 </TableRow>
-              ))}
+                ))
+              )}
             </TableBody>
           </Table>
         </TableContainer>
-        <TablePagination
-          rowsPerPageOptions={[5, 10, 25]}
-          component="div"
-          count={total}
-          rowsPerPage={rowsPerPage}
-          page={page}
-          onPageChange={handleChangePage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
-        />
       </Paper>
     </Box>
   );

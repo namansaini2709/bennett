@@ -1,17 +1,17 @@
 export const API_BASE_URL = 'http://localhost:5000/api';
 
-export const CATEGORIES = [
-  { value: 'road_issue', label: 'Road Issue' },
-  { value: 'water_supply', label: 'Water Supply' },
-  { value: 'electricity', label: 'Electricity' },
-  { value: 'garbage', label: 'Garbage' },
-  { value: 'drainage', label: 'Drainage' },
-  { value: 'street_light', label: 'Street Light' },
-  { value: 'traffic', label: 'Traffic' },
-  { value: 'pollution', label: 'Pollution' },
-  { value: 'encroachment', label: 'Encroachment' },
-  { value: 'other', label: 'Other' }
-];
+export const CATEGORIES = {
+  road_issue: 'Road Issue',
+  water_supply: 'Water Supply',
+  electricity: 'Electricity',
+  garbage: 'Garbage',
+  drainage: 'Drainage',
+  street_light: 'Street Light',
+  traffic: 'Traffic',
+  pollution: 'Pollution',
+  encroachment: 'Encroachment',
+  other: 'Other'
+};
 
 export const PRIORITY_LEVELS = [
   { value: 'low', label: 'Low', color: '#4CAF50' },

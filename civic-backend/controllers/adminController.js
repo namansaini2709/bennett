@@ -1,5 +1,6 @@
 const Report = require('../models/Report');
 const User = require('../models/User');
+const Department = require('../models/Department');
 
 exports.getDashboardStats = async (req, res) => {
   try {
@@ -70,11 +71,22 @@ exports.getDashboardStats = async (req, res) => {
 
 exports.getReportAnalytics = async (req, res) => {
   try {
-    const { startDate, endDate, groupBy = 'day' } = req.query;
+    const { startDate, endDate, timeRange, groupBy = 'day' } = req.query;
 
     const matchQuery = { isDeleted: false };
 
-    if (startDate && endDate) {
+    // Handle timeRange parameter (7, 30, 90 days)
+    if (timeRange) {
+      const days = parseInt(timeRange);
+      const endDateTime = new Date();
+      const startDateTime = new Date();
+      startDateTime.setDate(endDateTime.getDate() - days);
+
+      matchQuery.createdAt = {
+        $gte: startDateTime,
+        $lte: endDateTime
+      };
+    } else if (startDate && endDate) {
       matchQuery.createdAt = {
         $gte: new Date(startDate),
         $lte: new Date(endDate)
@@ -167,8 +179,24 @@ exports.getReportAnalytics = async (req, res) => {
 
 exports.getUserAnalytics = async (req, res) => {
   try {
+    const { timeRange } = req.query;
+
+    // Build match query for time-based filtering
+    const matchQuery = { isDeleted: false };
+    if (timeRange) {
+      const days = parseInt(timeRange);
+      const endDateTime = new Date();
+      const startDateTime = new Date();
+      startDateTime.setDate(endDateTime.getDate() - days);
+
+      matchQuery.createdAt = {
+        $gte: startDateTime,
+        $lte: endDateTime
+      };
+    }
+
     const userStats = await User.aggregate([
-      { $match: { isDeleted: false } },
+      { $match: { isDeleted: false } }, // Keep all-time stats for user role distribution
       {
         $group: {
           _id: '$role',
@@ -183,8 +211,9 @@ exports.getUserAnalytics = async (req, res) => {
       }
     ]);
 
+    // Apply time filtering to registration trend
     const registrationTrend = await User.aggregate([
-      { $match: { isDeleted: false } },
+      { $match: matchQuery },
       {
         $group: {
           _id: {
@@ -194,11 +223,25 @@ exports.getUserAnalytics = async (req, res) => {
         }
       },
       { $sort: { _id: -1 } },
-      { $limit: 30 }
+      { $limit: timeRange ? parseInt(timeRange) : 30 }
     ]);
 
+    // Apply time filtering to top reporters as well
+    const reportMatchQuery = { isDeleted: false };
+    if (timeRange) {
+      const days = parseInt(timeRange);
+      const endDateTime = new Date();
+      const startDateTime = new Date();
+      startDateTime.setDate(endDateTime.getDate() - days);
+
+      reportMatchQuery.createdAt = {
+        $gte: startDateTime,
+        $lte: endDateTime
+      };
+    }
+
     const topReporters = await Report.aggregate([
-      { $match: { isDeleted: false } },
+      { $match: reportMatchQuery },
       {
         $group: {
           _id: '$reporterId',
@@ -387,10 +430,9 @@ exports.assignAreaToStaff = async (req, res) => {
 
 exports.getDepartments = async (req, res) => {
   try {
-    const departments = await User.distinct('department', {
-      department: { $exists: true, $ne: null },
-      isDeleted: false
-    });
+    const departments = await Department.find({ isDeleted: false })
+      .populate('headOfDepartment', 'name email')
+      .sort({ name: 1 });
 
     res.status(200).json({
       success: true,
@@ -408,18 +450,217 @@ exports.getDepartments = async (req, res) => {
 
 exports.createDepartment = async (req, res) => {
   try {
-    const { name, description } = req.body;
+    const { name, code, description, categories, contactEmail, contactPhone, headOfDepartment } = req.body;
 
-    res.status(200).json({
+    if (!name || !code) {
+      return res.status(400).json({
+        success: false,
+        message: 'Department name and code are required'
+      });
+    }
+
+    const existingDept = await Department.findOne({
+      $or: [{ name }, { code }],
+      isDeleted: false
+    });
+
+    if (existingDept) {
+      return res.status(400).json({
+        success: false,
+        message: 'Department with this name or code already exists'
+      });
+    }
+
+    const department = await Department.create({
+      name,
+      code,
+      description,
+      categories,
+      contactEmail,
+      contactPhone,
+      headOfDepartment,
+      createdBy: req.user._id
+    });
+
+    res.status(201).json({
       success: true,
-      message: 'Department feature to be implemented',
-      data: { name, description }
+      message: 'Department created successfully',
+      data: department
     });
   } catch (error) {
     console.error('Create department error:', error);
     res.status(500).json({
       success: false,
       message: 'Error creating department',
+      error: error.message
+    });
+  }
+};
+
+exports.updateDepartment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, code, description, categories, contactEmail, contactPhone, headOfDepartment, isActive } = req.body;
+
+    const department = await Department.findById(id);
+
+    if (!department || department.isDeleted) {
+      return res.status(404).json({
+        success: false,
+        message: 'Department not found'
+      });
+    }
+
+    if (name && name !== department.name) {
+      const existingDept = await Department.findOne({ name, isDeleted: false, _id: { $ne: id } });
+      if (existingDept) {
+        return res.status(400).json({
+          success: false,
+          message: 'Department with this name already exists'
+        });
+      }
+      department.name = name;
+    }
+
+    if (code && code !== department.code) {
+      const existingDept = await Department.findOne({ code, isDeleted: false, _id: { $ne: id } });
+      if (existingDept) {
+        return res.status(400).json({
+          success: false,
+          message: 'Department with this code already exists'
+        });
+      }
+      department.code = code;
+    }
+
+    if (description !== undefined) department.description = description;
+    if (categories !== undefined) department.categories = categories;
+    if (contactEmail !== undefined) department.contactEmail = contactEmail;
+    if (contactPhone !== undefined) department.contactPhone = contactPhone;
+    if (headOfDepartment !== undefined) department.headOfDepartment = headOfDepartment;
+    if (isActive !== undefined) department.isActive = isActive;
+    department.updatedBy = req.user._id;
+
+    await department.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Department updated successfully',
+      data: department
+    });
+  } catch (error) {
+    console.error('Update department error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating department',
+      error: error.message
+    });
+  }
+};
+
+exports.deleteDepartment = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const department = await Department.findById(id);
+
+    if (!department || department.isDeleted) {
+      return res.status(404).json({
+        success: false,
+        message: 'Department not found'
+      });
+    }
+
+    const staffCount = await User.countDocuments({
+      department: department.code,
+      isDeleted: false
+    });
+
+    if (staffCount > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete department. ${staffCount} staff member(s) are assigned to this department.`
+      });
+    }
+
+    department.isDeleted = true;
+    department.updatedBy = req.user._id;
+    await department.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Department deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete department error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting department',
+      error: error.message
+    });
+  }
+};
+
+exports.createStaffUser = async (req, res) => {
+  try {
+    const { name, email, phone, password, role, department, assignedArea } = req.body;
+
+    if (!name || !email || !phone || !password || !role || !department) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name, email, phone, password, role, and department are required'
+      });
+    }
+
+    if (!['staff', 'supervisor', 'admin'].includes(role)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid role. Must be staff, supervisor, or admin'
+      });
+    }
+
+    const userExists = await User.findOne({
+      $or: [{ email }, { phone }],
+      isDeleted: false
+    });
+
+    if (userExists) {
+      return res.status(400).json({
+        success: false,
+        message: 'User with this email or phone already exists'
+      });
+    }
+
+    const dept = await Department.findOne({ code: department, isDeleted: false });
+    if (!dept) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid department code'
+      });
+    }
+
+    const staffUser = await User.create({
+      name,
+      email,
+      phone,
+      password,
+      role,
+      department,
+      assignedArea,
+      isVerified: true,
+      createdBy: req.user._id
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Staff user created successfully',
+      data: staffUser
+    });
+  } catch (error) {
+    console.error('Create staff user error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error creating staff user',
       error: error.message
     });
   }

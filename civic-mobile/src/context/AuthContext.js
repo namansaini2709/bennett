@@ -14,13 +14,39 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     loadStoredAuth();
+    setupAxiosInterceptor();
   }, []);
+
+  const setupAxiosInterceptor = () => {
+    axios.interceptors.response.use(
+      (response) => response,
+      async (error) => {
+        if (error.response?.status === 401) {
+          console.log('401 Unauthorized - Token expired or invalid');
+          await handleTokenExpired();
+        }
+        return Promise.reject(error);
+      }
+    );
+  };
+
+  const handleTokenExpired = async () => {
+    try {
+      await AsyncStorage.removeItem('userToken');
+      await AsyncStorage.removeItem('userData');
+      setUser(null);
+      setToken(null);
+      delete axios.defaults.headers.common['Authorization'];
+    } catch (error) {
+      console.error('Error clearing auth data:', error);
+    }
+  };
 
   const loadStoredAuth = async () => {
     try {
       const storedToken = await AsyncStorage.getItem('userToken');
       const storedUser = await AsyncStorage.getItem('userData');
-      
+
       if (storedToken && storedUser) {
         setToken(storedToken);
         setUser(JSON.parse(storedUser));
@@ -82,13 +108,18 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
+      console.log('AuthContext: Starting logout process...');
       await AsyncStorage.removeItem('userToken');
       await AsyncStorage.removeItem('userData');
+      console.log('AuthContext: Cleared AsyncStorage');
       setUser(null);
       setToken(null);
+      console.log('AuthContext: Cleared user and token state');
       delete axios.defaults.headers.common['Authorization'];
+      console.log('AuthContext: Logout completed, user should be redirected to login');
     } catch (error) {
       console.error('Error during logout:', error);
+      throw error;
     }
   };
 

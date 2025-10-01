@@ -44,11 +44,12 @@ class ReportService {
 
       // Add media file if present
       if (reportData.image) {
-        const fileName = reportData.image.split('/').pop();
+        const imageUri = reportData.image.uri || reportData.image;
+        const fileName = imageUri.split('/').pop();
         const fileType = fileName.split('.').pop();
-        
+
         formData.append('media', {
-          uri: reportData.image,
+          uri: imageUri,
           type: `image/${fileType}`,
           name: fileName,
         });
@@ -75,9 +76,9 @@ class ReportService {
     }
   }
 
-  async getMyReports() {
+  async getMyReports(limit = 100) {
     try {
-      const response = await this.apiClient.get('/reports/my-reports');
+      const response = await this.apiClient.get(`/reports/my-reports?limit=${limit}`);
       return {
         success: true,
         data: response.data.data,
@@ -88,6 +89,43 @@ class ReportService {
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch reports',
+        data: []
+      };
+    }
+  }
+
+  async getAllReports(limit = 100, params = {}) {
+    try {
+      const queryParams = { limit, ...params };
+      const response = await this.apiClient.get('/reports', { params: queryParams });
+      return {
+        success: true,
+        data: response.data.data,
+        pagination: response.data.pagination
+      };
+    } catch (error) {
+      console.error('Fetch all reports error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to fetch reports',
+        data: []
+      };
+    }
+  }
+
+  async getNearbyReports(latitude, longitude, radius = 1000, limit = 100) {
+    try {
+      const response = await this.apiClient.get(`/reports/nearby?lat=${latitude}&lng=${longitude}&radius=${radius}&limit=${limit}`);
+      return {
+        success: true,
+        data: response.data.data,
+        pagination: response.data.pagination
+      };
+    } catch (error) {
+      console.error('Fetch nearby reports error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to fetch nearby reports',
         data: []
       };
     }
@@ -139,6 +177,22 @@ class ReportService {
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to upvote report'
+      };
+    }
+  }
+
+  async deleteReport(reportId) {
+    try {
+      const response = await this.apiClient.delete(`/reports/${reportId}`);
+      return {
+        success: true,
+        message: response.data.message || 'Report deleted successfully'
+      };
+    } catch (error) {
+      console.error('Delete report error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to delete report'
       };
     }
   }

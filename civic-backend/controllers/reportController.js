@@ -93,8 +93,8 @@ exports.createReport = async (req, res) => {
 exports.getAllReports = async (req, res) => {
   try {
     const {
-      page = 1,
-      limit = 10,
+      page,
+      limit,
       status,
       category,
       priority,
@@ -110,29 +110,41 @@ exports.getAllReports = async (req, res) => {
     if (priority) query.priority = priority;
     if (department) query.department = department;
 
-    const skip = (page - 1) * limit;
     const sortOrder = order === 'asc' ? 1 : -1;
 
-    const reports = await Report.find(query)
+    let reportsQuery = Report.find(query)
       .populate('reporterId', 'name email phone')
       .populate('assignedTo', 'name email department')
       .populate('media')
-      .sort({ [sortBy]: sortOrder })
-      .limit(parseInt(limit))
-      .skip(skip);
+      .sort({ [sortBy]: sortOrder });
 
+    // Only apply pagination if page and limit are provided
+    if (page && limit) {
+      const skip = (parseInt(page) - 1) * parseInt(limit);
+      reportsQuery = reportsQuery.limit(parseInt(limit)).skip(skip);
+    }
+
+    const reports = await reportsQuery;
     const total = await Report.countDocuments(query);
 
-    res.status(200).json({
+    const response = {
       success: true,
-      data: reports,
-      pagination: {
+      data: reports
+    };
+
+    // Only include pagination info if pagination was requested
+    if (page && limit) {
+      response.pagination = {
         page: parseInt(page),
         limit: parseInt(limit),
         total,
-        pages: Math.ceil(total / limit)
-      }
-    });
+        pages: Math.ceil(total / parseInt(limit))
+      };
+    } else {
+      response.total = total;
+    }
+
+    res.status(200).json(response);
   } catch (error) {
     console.error('Get all reports error:', error);
     res.status(500).json({
@@ -277,7 +289,7 @@ exports.updateReport = async (req, res) => {
 
 exports.deleteReport = async (req, res) => {
   try {
-    const report = await Report.findById(req.params.id);
+    const report = await Report.findById(req.params.id).populate('media');
 
     if (!report) {
       return res.status(404).json({
@@ -286,22 +298,37 @@ exports.deleteReport = async (req, res) => {
       });
     }
 
-    if (report.reporterId.toString() !== req.user._id.toString() && 
-        req.user.role !== 'admin') {
+    // Admin-only deletion (route already enforces this, but double-check)
+    if (req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
-        message: 'Not authorized to delete this report'
+        message: 'Only administrators can delete reports'
       });
     }
 
-    report.isDeleted = true;
-    report.isActive = false;
-    report.updatedBy = req.user._id;
-    await report.save();
+    // Delete associated media from Cloudinary and database
+    if (report.media && report.media.length > 0) {
+      for (const media of report.media) {
+        try {
+          // Delete from Cloudinary
+          if (media.cloudinaryId) {
+            await cloudinary.uploader.destroy(media.cloudinaryId);
+          }
+          // Delete from database
+          await Media.findByIdAndDelete(media._id);
+        } catch (mediaError) {
+          console.error('Error deleting media:', mediaError);
+          // Continue with report deletion even if media deletion fails
+        }
+      }
+    }
+
+    // HARD DELETE: Permanently remove from database
+    await Report.findByIdAndDelete(req.params.id);
 
     res.status(200).json({
       success: true,
-      message: 'Report deleted successfully'
+      message: 'Report permanently deleted successfully'
     });
   } catch (error) {
     console.error('Delete report error:', error);
