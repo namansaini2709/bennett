@@ -12,7 +12,8 @@ civic-mobile/.env
 **/.env
 **/.env.*
 
-# Claude Code local settings (may contain personal info)
+# Claude Code (folder and all contents - contains personal settings)
+.claude/
 .claude/settings.local.json
 
 # ========================================
@@ -244,9 +245,7 @@ docs/internal/
 manualtestingbugs.md
 
 # Security-related internal files (contain sensitive info)
-CREDENTIAL_ROTATION.md
-SECURITY_AUDIT_REPORT.md
-NEXT_STEPS.md
+
 
 # Git history cleanup scripts (internal use only)
 clean-git-history.sh
