@@ -1,5 +1,15 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
+# ========================================
+# MOBILE APP SPECIFIC IGNORES
+# ========================================
+
+# Environment variables
+.env
+.env.*
+!.env.example
+.env*.local
+
 # dependencies
 node_modules/
 
@@ -30,12 +40,27 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
-
 # typescript
 *.tsbuildinfo
 
 # generated native folders
 /ios
 /android
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+Thumbs.db
+
+# Firebase config (if contains sensitive keys)
+# Uncomment if your config has sensitive data
+# google-services.json
+# GoogleService-Info.plist
+
+# Test coverage
+coverage/

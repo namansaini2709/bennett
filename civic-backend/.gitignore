@@ -1,0 +1,62 @@
+# ========================================
+# BACKEND SPECIFIC IGNORES
+# ========================================
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Logs
+*.log
+logs/
+
+# Uploads & user generated content
+uploads/
+public/uploads/
+temp/
+tmp/
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+dump/
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Cache
+.cache/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Credentials & keys
+*.pem
+*.key
+*.cert
+credentials.json
+service-account*.json
+
+# Session data
+sessions/
+
+# PM2 logs (if using PM2 for process management)
+.pm2/
+pids/
+*.pid
+*.seed
