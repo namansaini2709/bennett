@@ -242,4 +242,12 @@ site/
 # Internal development notes
 docs/internal/
 manualtestingbugs.md
+
+# Security-related internal files (contain sensitive info)
 CREDENTIAL_ROTATION.md
+SECURITY_AUDIT_REPORT.md
+NEXT_STEPS.md
+
+# Git history cleanup scripts (internal use only)
+clean-git-history.sh
+clean-git-history.bat
