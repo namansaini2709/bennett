@@ -251,3 +251,7 @@ NEXT_STEPS.md
 # Git history cleanup scripts (internal use only)
 clean-git-history.sh
 clean-git-history.bat
+
+# Project specifications (internal)
+CLAUDE.md
+claude.md
