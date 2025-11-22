@@ -4,6 +4,7 @@ const { body, validationResult } = require('express-validator');
 const reportController = require('../controllers/reportController');
 const { protect, authorize, optionalAuth } = require('../middleware/auth');
 const upload = require('../middleware/upload');
+const demoProtection = require('../middleware/demoProtection');
 
 const validateReport = [
   body('title').trim().notEmpty().withMessage('Title is required'),
@@ -21,16 +22,16 @@ router.get('/stats', reportController.getReportStats);
 router.get('/:id', optionalAuth, reportController.getReportById);
 
 router.post('/', protect, upload.array('media', 5), validateReport, reportController.createReport);
-router.put('/:id', protect, reportController.updateReport);
-router.delete('/:id', protect, authorize('admin'), reportController.deleteReport);
+router.put('/:id', protect, demoProtection, reportController.updateReport);
+router.delete('/:id', protect, authorize('admin'), demoProtection, reportController.deleteReport);
 
-router.patch('/:id/status', protect, authorize('staff', 'supervisor', 'admin'), reportController.updateReportStatus);
-router.post('/:id/assign', protect, authorize('supervisor', 'admin'), reportController.assignReport);
-router.post('/:id/comment', protect, reportController.addComment);
-router.post('/:id/upvote', protect, reportController.upvoteReport);
-router.post('/:id/feedback', protect, reportController.addFeedback);
+router.patch('/:id/status', protect, authorize('staff', 'supervisor', 'admin', 'demo'), demoProtection, reportController.updateReportStatus);
+router.post('/:id/assign', protect, authorize('supervisor', 'admin'), demoProtection, reportController.assignReport);
+router.post('/:id/comment', protect, demoProtection, reportController.addComment);
+router.post('/:id/upvote', protect, demoProtection, reportController.upvoteReport);
+router.post('/:id/feedback', protect, demoProtection, reportController.addFeedback);
 
-router.post('/:id/media', protect, upload.array('media', 5), reportController.addMedia);
-router.delete('/:id/media/:mediaId', protect, reportController.deleteMedia);
+router.post('/:id/media', protect, upload.array('media', 5), demoProtection, reportController.addMedia);
+router.delete('/:id/media/:mediaId', protect, demoProtection, reportController.deleteMedia);
 
 module.exports = router;

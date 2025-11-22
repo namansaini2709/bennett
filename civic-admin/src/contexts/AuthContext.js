@@ -42,7 +42,7 @@ export const AuthProvider = ({ children }) => {
 
       const { user, token } = response.data.data;
 
-      if (!['admin', 'supervisor'].includes(user.role)) {
+      if (!['admin', 'supervisor', 'demo'].includes(user.role)) {
         throw new Error('Unauthorized access');
       }
 

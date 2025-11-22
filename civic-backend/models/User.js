@@ -28,7 +28,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['citizen', 'staff', 'supervisor', 'admin'],
+    enum: ['citizen', 'staff', 'supervisor', 'admin', 'demo'],
     default: 'citizen'
   },
   language: {
@@ -67,7 +67,7 @@ const userSchema = new mongoose.Schema({
   department: {
     type: String,
     required: function() {
-      return this.role !== 'citizen';
+      return !['citizen', 'demo'].includes(this.role);
     }
   },
   assignedArea: {

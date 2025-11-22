@@ -16,7 +16,8 @@ import {
   Avatar,
   Menu,
   MenuItem,
-  Tooltip
+  Tooltip,
+  Alert
 } from '@mui/material';
 import logo from '../assets/logo.png';
 import {
@@ -214,6 +215,14 @@ const Layout = () => {
           mt: 8
         }}
       >
+        {user?.role === 'demo' && (
+          <Alert severity="warning" sx={{ mb: 3 }}>
+            <Typography variant="body2">
+              <strong>Demo Mode:</strong> You're viewing this dashboard in read-only mode.
+              All modification features are disabled. Contact the administrator for full access.
+            </Typography>
+          </Alert>
+        )}
         <Outlet />
       </Box>
     </Box>
