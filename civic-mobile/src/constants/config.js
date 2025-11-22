@@ -1,4 +1,4 @@
-export const API_BASE_URL = 'http://localhost:5000/api';
+export const API_BASE_URL = 'https://civic-setu-backend.onrender.com/api';
 
 export const CATEGORIES = {
   road_issue: 'Road Issue',

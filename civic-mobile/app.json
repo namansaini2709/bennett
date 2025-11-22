@@ -16,6 +16,11 @@
       "edgeToEdgeEnabled": true,
       "package": "com.anonymous.civicmobile"
     },
-    "web": {}
+    "web": {},
+    "extra": {
+      "eas": {
+        "projectId": "4e55e97d-1161-42c2-977a-b6caca175549"
+      }
+    }
   }
 }
