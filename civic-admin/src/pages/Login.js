@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Container,
@@ -9,7 +9,11 @@ import {
   Box,
   Alert,
   IconButton,
-  InputAdornment
+  InputAdornment,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { motion } from 'framer-motion';
@@ -25,8 +29,24 @@ const Login = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showMobileWarning, setShowMobileWarning] = useState(false);
   const navigate = useNavigate();
   const { login } = useAuth();
+
+  useEffect(() => {
+    // Check if user is on mobile and hasn't seen warning
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const hasSeenWarning = localStorage.getItem('hasSeenMobileWarning');
+
+    if (isMobile && !hasSeenWarning) {
+      setShowMobileWarning(true);
+    }
+  }, []);
+
+  const handleCloseWarning = () => {
+    localStorage.setItem('hasSeenMobileWarning', 'true');
+    setShowMobileWarning(false);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -248,6 +268,36 @@ const Login = () => {
           </MotionPaper>
         </motion.div>
       </Container>
+
+      <Dialog
+        open={showMobileWarning}
+        onClose={handleCloseWarning}
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            padding: 2
+          }
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 700, color: '#764ba2' }}>
+          Desktop Mode Recommended
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1">
+            This dashboard is optimized for desktop. For mobile access, please use desktop mode.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseWarning} variant="contained" sx={{
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            '&:hover': {
+              background: 'linear-gradient(135deg, #764ba2 0%, #667eea 100%)',
+            }
+          }}>
+            Got it
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
