@@ -604,15 +604,38 @@ const Reports = () => {
                 <Box sx={{ mb: 2 }}>
                   <Typography variant="caption" color="text.secondary">Media</Typography>
                   <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
-                    {selectedReport.media.map((mediaUrl, index) => (
-                      <Box
-                        key={index}
-                        component="img"
-                        src={mediaUrl}
-                        alt={`Report media ${index + 1}`}
-                        sx={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 1 }}
-                      />
-                    ))}
+                    {selectedReport.media.map((media, index) => {
+                      // Handle both populated media objects and direct URLs
+                      const mediaUrl = typeof media === 'string' ? media : media?.url;
+                      const mediaType = typeof media === 'string' ? 'image' : media?.type;
+
+                      if (!mediaUrl) return null;
+
+                      if (mediaType === 'video') {
+                        return (
+                          <Box
+                            key={index}
+                            component="video"
+                            src={mediaUrl}
+                            controls
+                            sx={{ width: 200, height: 150, objectFit: 'cover', borderRadius: 1 }}
+                          />
+                        );
+                      }
+
+                      return (
+                        <Box
+                          key={index}
+                          component="img"
+                          src={mediaUrl}
+                          alt={`Report media ${index + 1}`}
+                          sx={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 1 }}
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                          }}
+                        />
+                      );
+                    })}
                   </Box>
                 </Box>
               )}

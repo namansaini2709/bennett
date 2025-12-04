@@ -58,7 +58,7 @@ const Analytics = () => {
   const [reportAnalytics, setReportAnalytics] = useState({ timeline: [], categories: [] });
   const [userAnalytics, setUserAnalytics] = useState({ userStats: [], registrationTrend: [], topReporters: [] });
   const [loading, setLoading] = useState(true);
-  const [timeRange, setTimeRange] = useState('30');
+  const [timeRange, setTimeRange] = useState('all');
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [autoRefresh, setAutoRefresh] = useState(true);
 
@@ -79,13 +79,11 @@ const Analytics = () => {
 
   const fetchAnalytics = async () => {
     try {
+      // Don't send timeRange parameter when 'all' is selected to get all data
+      const params = timeRange === 'all' ? {} : { timeRange };
       const [reportsResponse, usersResponse] = await Promise.all([
-        axios.get(`${API_BASE_URL}/admin/reports/analytics`, {
-          params: { timeRange }
-        }),
-        axios.get(`${API_BASE_URL}/admin/users/analytics`, {
-          params: { timeRange }
-        })
+        axios.get(`${API_BASE_URL}/admin/reports/analytics`, { params }),
+        axios.get(`${API_BASE_URL}/admin/users/analytics`, { params })
       ]);
 
       setReportAnalytics(reportsResponse.data.data);
@@ -223,7 +221,7 @@ const Analytics = () => {
                 }
               }}
             >
-              <ToggleButton value="7">7 Days</ToggleButton>
+              <ToggleButton value="all">Till Date</ToggleButton>
               <ToggleButton value="30">30 Days</ToggleButton>
               <ToggleButton value="90">90 Days</ToggleButton>
             </ToggleButtonGroup>
@@ -369,7 +367,12 @@ const Analytics = () => {
                   <Typography variant="h6" sx={{ fontWeight: 600 }}>
                     User Registration Trend
                   </Typography>
-                  <Chip label="Last 30 Days" size="small" color="success" variant="outlined" />
+                  <Chip
+                    label={timeRange === 'all' ? 'All Time' : `Last ${timeRange} Days`}
+                    size="small"
+                    color="success"
+                    variant="outlined"
+                  />
                 </Box>
                 <ResponsiveContainer width="100%" height={320}>
                   <BarChart data={userAnalytics.registrationTrend.slice().reverse()}>

@@ -50,7 +50,10 @@ const ReportDetailScreen = ({ route, navigation }) => {
           assignedTo: reportData.assignedTo?.name || reportData.assignedTo || null,
           estimatedCompletion: reportData.estimatedCompletion || null,
           resolution: reportData.resolution || null,
-          images: reportData.media || [],
+          // Extract URLs from media objects, handle both populated objects and direct URLs
+          images: (reportData.media || []).map(media =>
+            typeof media === 'string' ? media : media?.url
+          ).filter(Boolean),
           comments: reportData.comments || [],
           upvotes: Array.isArray(reportData.upvotes) ? reportData.upvotes.length : 0
         };
