@@ -55,21 +55,15 @@ const authRoutes = require('./routes/auth');
 const reportRoutes = require('./routes/reports');
 const userRoutes = require('./routes/users');
 const adminRoutes = require('./routes/admin');
-<<<<<<< HEAD
 const chatRoutes = require('./routes/chat');
-=======
 const ivrRoutes = require('./routes/ivr');
->>>>>>> origin/naman
 
 app.use('/api/auth', authRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
-<<<<<<< HEAD
 app.use('/api/chat', chatRoutes);
-=======
 app.use('/api/ivr', ivrRoutes);
->>>>>>> origin/naman
 
 app.get('/api/health', (req, res) => {
   res.json({ 
