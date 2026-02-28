@@ -60,3 +60,5 @@ sessions/
 pids/
 *.pid
 *.seed
+
+/generated/prisma
