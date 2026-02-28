@@ -21,6 +21,22 @@ exports.createReport = async (req, res) => {
       isAnonymous
     } = req.body;
 
+    // Auto-route: find which department handles this category
+    let autoAssignedDept = null;
+    try {
+      const matchingDept = await prisma.department.findFirst({
+        where: {
+          isDeleted: false,
+          isActive: true,
+          categories: { has: category }
+        },
+        select: { name: true }
+      });
+      autoAssignedDept = matchingDept?.name || null;
+    } catch (_) {
+      // Non-fatal: if dept lookup fails, report still creates normally
+    }
+
     const report = await prisma.report.create({
       data: {
         reporterId: req.user.id,
@@ -36,6 +52,7 @@ exports.createReport = async (req, res) => {
         longitude: parseFloat(location.longitude),
         priority: priority || 'medium',
         isAnonymous: isAnonymous || false,
+        department: autoAssignedDept,
         statusHistory: {
           create: {
             status: 'submitted',

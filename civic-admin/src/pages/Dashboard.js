@@ -57,9 +57,14 @@ const Dashboard = () => {
   const fetchDashboardData = async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/admin/dashboard`);
-      const { stats, recentReports } = response.data.data;
-      setStats(stats);
-      setRecentReports(recentReports);
+      if (response.data && response.data.success && response.data.data) {
+        const { stats, recentReports } = response.data.data;
+        setStats(prevStats => ({
+          ...prevStats,
+          ...(stats || {})
+        }));
+        setRecentReports(recentReports || []);
+      }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -72,37 +77,37 @@ const Dashboard = () => {
   const statCards = [
     {
       title: 'Total Reports',
-      value: stats.totalReports,
+      value: stats?.totalReports || 0,
       icon: <Report fontSize="large" />,
       color: '#2196F3'
     },
     {
       title: 'Today\'s Reports',
-      value: stats.todayReports,
+      value: stats?.todayReports || 0,
       icon: <TrendingUp fontSize="large" />,
       color: '#4CAF50'
     },
     {
       title: 'Pending Reports',
-      value: stats.pendingReports,
+      value: stats?.pendingReports || 0,
       icon: <Pending fontSize="large" />,
       color: '#FF9800'
     },
     {
       title: 'Resolved Reports',
-      value: stats.resolvedReports,
+      value: stats?.resolvedReports || 0,
       icon: <CheckCircle fontSize="large" />,
       color: '#4CAF50'
     },
     {
       title: 'Total Users',
-      value: stats.totalUsers,
+      value: stats?.totalUsers || 0,
       icon: <People fontSize="large" />,
       color: '#9C27B0'
     },
     {
       title: 'Active Staff',
-      value: stats.activeStaff,
+      value: stats?.activeStaff || 0,
       icon: <People fontSize="large" />,
       color: '#00BCD4'
     }

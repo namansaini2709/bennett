@@ -15,6 +15,8 @@ import Staff from './pages/Staff';
 import Departments from './pages/Departments';
 import Analytics from './pages/Analytics';
 import Profile from './pages/Profile';
+import Messages from './pages/Messages';
+import Contractors from './pages/Contractors';
 import PrivateRoute from './components/PrivateRoute';
 import CustomCursor from './components/CustomCursor';
 
@@ -36,8 +38,10 @@ const AppContent = () => {
               <Route path="users" element={<Users />} />
               <Route path="staff" element={<Staff />} />
               <Route path="departments" element={<Departments />} />
+              <Route path="contractors" element={<Contractors />} />
               <Route path="analytics" element={<Analytics />} />
               <Route path="profile" element={<Profile />} />
+              <Route path="messages" element={<Messages />} />
             </Route>
           </Routes>
         </Router>

@@ -79,6 +79,7 @@ const Analytics = () => {
 
   const fetchAnalytics = async () => {
     try {
+      setLoading(true);
       // Don't send timeRange parameter when 'all' is selected to get all data
       const params = timeRange === 'all' ? {} : { timeRange };
       const [reportsResponse, usersResponse] = await Promise.all([
@@ -86,8 +87,14 @@ const Analytics = () => {
         axios.get(`${API_BASE_URL}/admin/users/analytics`, { params })
       ]);
 
-      setReportAnalytics(reportsResponse.data.data);
-      setUserAnalytics(usersResponse.data.data);
+      if (reportsResponse.data?.success && reportsResponse.data?.data) {
+        setReportAnalytics(reportsResponse.data.data);
+      }
+      
+      if (usersResponse.data?.success && usersResponse.data?.data) {
+        setUserAnalytics(usersResponse.data.data);
+      }
+      
       setLastUpdated(new Date());
     } catch (error) {
       console.error('Error fetching analytics:', error);
@@ -97,16 +104,20 @@ const Analytics = () => {
   };
 
   const summaryStats = useMemo(() => {
-    const totalReports = reportAnalytics.timeline?.reduce((acc, item) => acc + (item.total || 0), 0) || 0;
+    const timeline = reportAnalytics?.timeline || [];
+    const categories = reportAnalytics?.categories || [];
+    const userStats = userAnalytics?.userStats || [];
 
-    const totalResolved = reportAnalytics.timeline?.reduce((acc, item) => {
+    const totalReports = timeline.reduce((acc, item) => acc + (item.total || 0), 0) || 0;
+
+    const totalResolved = timeline.reduce((acc, item) => {
       const resolvedStatus = item.statusCounts?.find(s => s.status === 'resolved');
       return acc + (resolvedStatus?.count || 0);
     }, 0) || 0;
 
     const resolutionRate = totalReports > 0 ? ((totalResolved / totalReports) * 100).toFixed(1) : 0;
-    const mostActiveCategory = reportAnalytics.categories?.[0]?._id || 'N/A';
-    const totalUsers = userAnalytics.userStats?.reduce((acc, stat) => acc + stat.count, 0) || 0;
+    const mostActiveCategory = categories[0]?._id || 'N/A';
+    const totalUsers = userStats.reduce((acc, stat) => acc + (stat.count || 0), 0) || 0;
 
     return {
       totalReports,
@@ -274,7 +285,7 @@ const Analytics = () => {
                   <Chip label="Trend Analysis" size="small" color="primary" variant="outlined" />
                 </Box>
                 <ResponsiveContainer width="100%" height={350}>
-                  <AreaChart data={reportAnalytics.timeline}>
+                  <AreaChart data={reportAnalytics?.timeline || []}>
                     <defs>
                       <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
@@ -316,7 +327,7 @@ const Analytics = () => {
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie
-                      data={reportAnalytics.categories}
+                      data={reportAnalytics?.categories || []}
                       cx="50%"
                       cy="50%"
                       labelLine={false}
@@ -327,7 +338,7 @@ const Analytics = () => {
                       nameKey="_id"
                       animationDuration={1500}
                     >
-                      {reportAnalytics.categories.map((entry, index) => (
+                      {(reportAnalytics?.categories || []).map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                       ))}
                     </Pie>
@@ -335,7 +346,7 @@ const Analytics = () => {
                   </PieChart>
                 </ResponsiveContainer>
                 <Box sx={{ mt: 2 }}>
-                  {reportAnalytics.categories.slice(0, 5).map((cat, idx) => (
+                  {(reportAnalytics?.categories || []).slice(0, 5).map((cat, idx) => (
                     <Box key={idx} display="flex" alignItems="center" justifyContent="space-between" mb={1}>
                       <Box display="flex" alignItems="center" gap={1}>
                         <Box
@@ -375,7 +386,7 @@ const Analytics = () => {
                   />
                 </Box>
                 <ResponsiveContainer width="100%" height={320}>
-                  <BarChart data={userAnalytics.registrationTrend.slice().reverse()}>
+                  <BarChart data={(userAnalytics?.registrationTrend || []).slice().reverse()}>
                     <defs>
                       <linearGradient id="colorBar" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="#10b981" stopOpacity={1}/>
@@ -412,9 +423,9 @@ const Analytics = () => {
                   User Role Distribution
                 </Typography>
                 <Box>
-                  {userAnalytics.userStats.map((stat, index) => {
-                    const total = userAnalytics.userStats.reduce((acc, s) => acc + s.count, 0);
-                    const percentage = ((stat.count / total) * 100).toFixed(1);
+                  {(userAnalytics?.userStats || []).map((stat, index) => {
+                    const total = (userAnalytics?.userStats || []).reduce((acc, s) => acc + (s.count || 0), 0);
+                    const percentage = total > 0 ? ((stat.count / total) * 100).toFixed(1) : 0;
                     const roleColors = {
                       admin: '#ef4444',
                       supervisor: '#f59e0b',

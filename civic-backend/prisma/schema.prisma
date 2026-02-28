@@ -119,6 +119,9 @@ model User {
 
   // Department head
   headingDepartment Department? @relation("DeptHead")
+  
+  chats            ChatParticipant[]
+  sentMessages     Message[]
 }
 
 model Department {
@@ -126,7 +129,7 @@ model Department {
   name             String   @unique
   code             String   @unique
   description      String?
-  categories       Category[]
+  categories       String[]
   
   headOfDepartmentId String? @unique
   headOfDepartment   User?   @relation("DeptHead", fields: [headOfDepartmentId], references: [id])
@@ -198,6 +201,39 @@ model Report {
   statusHistory    ReportStatusHistory[]
   comments         Comment[]
   upvotes          Upvote[]
+}
+
+model Chat {
+  id               String   @id @default(uuid())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  participants     ChatParticipant[]
+  messages         Message[]
+}
+
+model ChatParticipant {
+  id               String   @id @default(uuid())
+  chatId           String
+  chat             Chat     @relation(fields: [chatId], references: [id])
+  
+  userId           String
+  user             User     @relation(fields: [userId], references: [id])
+
+  @@unique([chatId, userId])
+}
+
+model Message {
+  id               String   @id @default(uuid())
+  chatId           String
+  chat             Chat     @relation(fields: [chatId], references: [id])
+  
+  senderId         String
+  sender           User     @relation(fields: [senderId], references: [id])
+  
+  content          String
+  isSeen           Boolean  @default(false)
+  createdAt        DateTime @default(now())
 }
 
 model Media {
