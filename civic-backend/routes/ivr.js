@@ -1,5 +1,9 @@
 const express = require('express');
 const crypto = require('crypto');
+const fs = require('fs/promises');
+const os = require('os');
+const path = require('path');
+const { spawn } = require('child_process');
 const prisma = require('../config/db');
 
 const router = express.Router();
@@ -39,6 +43,14 @@ const DEFAULT_CITY = process.env.IVR_DEFAULT_CITY || 'Delhi';
 const DEFAULT_STATE = process.env.IVR_DEFAULT_STATE || 'Delhi';
 const DEFAULT_LATITUDE = Number(process.env.IVR_DEFAULT_LATITUDE || 28.6139);
 const DEFAULT_LONGITUDE = Number(process.env.IVR_DEFAULT_LONGITUDE || 77.2090);
+const IVR_USE_RECORDING_TRANSCRIPTION = process.env.IVR_USE_RECORDING_TRANSCRIPTION === 'true';
+const IVR_TRANSCRIPTION_PROVIDER = process.env.IVR_TRANSCRIPTION_PROVIDER || 'twilio_speech';
+const IVR_LOCAL_WHISPER_SCRIPT = process.env.IVR_LOCAL_WHISPER_SCRIPT || path.join(__dirname, '..', 'scripts', 'transcribe_local_whisper.py');
+const IVR_LOCAL_WHISPER_PYTHON = process.env.IVR_LOCAL_WHISPER_PYTHON || 'python';
+const IVR_LOCAL_WHISPER_MODEL = process.env.IVR_LOCAL_WHISPER_MODEL || 'tiny';
+const IVR_LOCAL_WHISPER_DEVICE = process.env.IVR_LOCAL_WHISPER_DEVICE || 'cpu';
+const IVR_TRANSCRIPTION_TIMEOUT_MS = Number(process.env.IVR_TRANSCRIPTION_TIMEOUT_MS || 8000);
+const IVR_GEMINI_TIMEOUT_MS = Number(process.env.IVR_GEMINI_TIMEOUT_MS || 4000);
 
 function escapeXml(text = '') {
   return String(text)
@@ -87,6 +99,13 @@ function buildIvrUrl(req, path, params = {}) {
   return `${base}${path}${query ? `?${query}` : ''}`;
 }
 
+function getTwilioParams(req) {
+  return {
+    ...(req.query || {}),
+    ...(req.body || {})
+  };
+}
+
 function getTwilioSignatureExpected(authToken, url, params) {
   const sortedKeys = Object.keys(params || {}).sort();
   let payload = url;
@@ -133,6 +152,15 @@ function safeJsonParse(text) {
   } catch (error) {
     return null;
   }
+}
+
+function withTimeout(promise, timeoutMs, label) {
+  let timeoutHandle;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutHandle = setTimeout(() => reject(new Error(`${label}_timeout`)), timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeoutHandle));
 }
 
 function extractJsonBlock(text = '') {
@@ -214,6 +242,112 @@ async function extractIssueWithGemini({ transcript, language, fallbackCategory }
   }
 
   return parsed;
+}
+
+function buildTwilioBasicAuthHeader() {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  if (!accountSid || !authToken) {
+    return null;
+  }
+  return `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString('base64')}`;
+}
+
+function normalizeTwilioRecordingUrl(url = '') {
+  const value = String(url || '').trim();
+  if (!value) return '';
+  if (value.endsWith('.wav') || value.endsWith('.mp3')) {
+    return value;
+  }
+  return `${value}.wav`;
+}
+
+async function downloadTwilioRecordingToTemp(recordingUrl, callSid = 'unknown') {
+  const authHeader = buildTwilioBasicAuthHeader();
+  if (!authHeader) {
+    throw new Error('Missing Twilio credentials for recording download');
+  }
+
+  const normalizedUrl = normalizeTwilioRecordingUrl(recordingUrl);
+  if (!normalizedUrl) {
+    throw new Error('Missing recording URL');
+  }
+
+  const response = await fetch(normalizedUrl, {
+    headers: { Authorization: authHeader }
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Could not fetch Twilio recording (${response.status}): ${errorText}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const fileName = `ivr_${callSid}_${Date.now()}.wav`;
+  const tempPath = path.join(os.tmpdir(), fileName);
+  await fs.writeFile(tempPath, Buffer.from(arrayBuffer));
+  return tempPath;
+}
+
+function runLocalWhisper({ audioPath, language }) {
+  const scriptPath = IVR_LOCAL_WHISPER_SCRIPT;
+  const model = IVR_LOCAL_WHISPER_MODEL;
+  const device = IVR_LOCAL_WHISPER_DEVICE;
+  const lang = language === 'hi' ? 'hi' : 'en';
+
+  return new Promise((resolve, reject) => {
+    const args = [scriptPath, '--audio', audioPath, '--language', lang, '--model', model, '--device', device];
+    const child = spawn(IVR_LOCAL_WHISPER_PYTHON, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on('error', (error) => {
+      reject(error);
+    });
+    child.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(`Local whisper script failed (${code}): ${stderr || 'no stderr'}`));
+        return;
+      }
+
+      const transcript = String(stdout || '').trim();
+      resolve(transcript);
+    });
+  });
+}
+
+async function transcribeWithLocalWhisper(recordingUrl, language, callSid) {
+  let audioPath = '';
+  try {
+    audioPath = await downloadTwilioRecordingToTemp(recordingUrl, callSid);
+    return await runLocalWhisper({ audioPath, language });
+  } finally {
+    if (audioPath) {
+      await fs.unlink(audioPath).catch(() => {});
+    }
+  }
+}
+
+async function transcribeRecording({ recordingUrl, language, callSid }) {
+  if (!recordingUrl || !IVR_USE_RECORDING_TRANSCRIPTION) {
+    return '';
+  }
+
+  if (IVR_TRANSCRIPTION_PROVIDER === 'local_whisper') {
+    return withTimeout(
+      transcribeWithLocalWhisper(recordingUrl, language, callSid),
+      IVR_TRANSCRIPTION_TIMEOUT_MS,
+      'local_whisper'
+    );
+  }
+
+  return '';
 }
 
 async function sendTwilioSms(to, body) {
@@ -333,9 +467,20 @@ function thankYouPrompt(languageCode, ticketId) {
   return `Thank you. Your issue has been registered. Your ticket number is ${ticketId}.`;
 }
 
-router.post('/twilio/incoming', verifyTwilioIfEnabled, async (req, res) => {
+router.all('/twilio', verifyTwilioIfEnabled, async (req, res) => {
   try {
-    console.log('[IVR] incoming', { from: req.body.From, callSid: req.body.CallSid });
+    const incomingUrl = escapeXml(buildIvrUrl(req, '/api/ivr/twilio/incoming'));
+    twimlResponse(res, `<Redirect method="POST">${incomingUrl}</Redirect>`);
+  } catch (error) {
+    console.error('IVR base route error:', error);
+    twimlResponse(res, '<Say>System error. Please try again later.</Say><Hangup/>');
+  }
+});
+
+router.all('/twilio/incoming', verifyTwilioIfEnabled, async (req, res) => {
+  try {
+    const params = getTwilioParams(req);
+    console.log('[IVR] incoming', { from: params.From, callSid: params.CallSid });
     const languageUrl = escapeXml(buildIvrUrl(req, '/api/ivr/twilio/language'));
     const incomingUrl = escapeXml(buildIvrUrl(req, '/api/ivr/twilio/incoming'));
     const gather = [
@@ -352,10 +497,11 @@ router.post('/twilio/incoming', verifyTwilioIfEnabled, async (req, res) => {
   }
 });
 
-router.post('/twilio/language', verifyTwilioIfEnabled, async (req, res) => {
+router.all('/twilio/language', verifyTwilioIfEnabled, async (req, res) => {
   try {
-    console.log('[IVR] language', { digit: req.body.Digits, from: req.body.From, callSid: req.body.CallSid });
-    const digit = req.body.Digits;
+    const params = getTwilioParams(req);
+    console.log('[IVR] language', { digit: params.Digits, from: params.From, callSid: params.CallSid });
+    const digit = params.Digits;
     const language = LANGUAGE_BY_DIGIT[digit] || 'hi';
     const categoryUrl = escapeXml(buildIvrUrl(req, '/api/ivr/twilio/category', { lang: language }));
     const languageUrl = escapeXml(buildIvrUrl(req, '/api/ivr/twilio/language', { lang: language }));
@@ -373,11 +519,12 @@ router.post('/twilio/language', verifyTwilioIfEnabled, async (req, res) => {
   }
 });
 
-router.post('/twilio/category', verifyTwilioIfEnabled, async (req, res) => {
+router.all('/twilio/category', verifyTwilioIfEnabled, async (req, res) => {
   try {
-    console.log('[IVR] category', { digit: req.body.Digits, lang: req.query.lang, from: req.body.From, callSid: req.body.CallSid });
+    const params = getTwilioParams(req);
+    console.log('[IVR] category', { digit: params.Digits, lang: req.query.lang, from: params.From, callSid: params.CallSid });
     const language = req.query.lang === 'en' ? 'en' : 'hi';
-    const digit = req.body.Digits;
+    const digit = params.Digits;
     const category = CATEGORY_BY_DIGIT[digit] || 'other';
     const finalizeUrl = escapeXml(buildIvrUrl(req, '/api/ivr/twilio/finalize', { lang: language, category }));
     const categoryUrl = escapeXml(buildIvrUrl(req, '/api/ivr/twilio/category', { lang: language }));
@@ -398,31 +545,39 @@ router.post('/twilio/category', verifyTwilioIfEnabled, async (req, res) => {
       'Noida',
       'Gurgaon'
     ].join(',');
-    const gather = [
-      `<Play>https://actions.google.com/sounds/v1/alarms/beep_short.ogg</Play>`,
-      `<Gather input="speech" language="${speechLanguage}" hints="${escapeXml(speechHints)}" speechModel="phone_call" speechTimeout="auto" actionOnEmptyResult="true" action="${finalizeUrl}" method="POST">`,
-      `<Say language="${language === 'hi' ? 'hi-IN' : 'en-IN'}" voice="alice">${escapeXml(descriptionPrompt(language))}</Say>`,
-      '</Gather>',
-      `<Redirect method="POST">${categoryUrl}</Redirect>`
-    ].join('');
+    const twiml = IVR_USE_RECORDING_TRANSCRIPTION && IVR_TRANSCRIPTION_PROVIDER === 'local_whisper'
+      ? [
+          `<Say language="${language === 'hi' ? 'hi-IN' : 'en-IN'}" voice="alice">${escapeXml(descriptionPrompt(language))}</Say>`,
+          `<Record playBeep="true" timeout="3" maxLength="30" action="${finalizeUrl}" method="POST"/>`,
+          `<Redirect method="POST">${categoryUrl}</Redirect>`
+        ].join('')
+      : [
+          `<Gather input="speech" language="${speechLanguage}" hints="${escapeXml(speechHints)}" speechModel="phone_call" speechTimeout="auto" actionOnEmptyResult="true" action="${finalizeUrl}" method="POST">`,
+          `<Say language="${language === 'hi' ? 'hi-IN' : 'en-IN'}" voice="alice">${escapeXml(descriptionPrompt(language))}</Say>`,
+          '</Gather>',
+          `<Redirect method="POST">${categoryUrl}</Redirect>`
+        ].join('');
 
-    twimlResponse(res, gather);
+    twimlResponse(res, twiml);
   } catch (error) {
     console.error('IVR category step error:', error);
     twimlResponse(res, '<Say>System error. Please try again later.</Say><Hangup/>');
   }
 });
 
-router.post('/twilio/finalize', verifyTwilioIfEnabled, async (req, res) => {
+router.all('/twilio/finalize', verifyTwilioIfEnabled, async (req, res) => {
   try {
-    console.log('[IVR] finalize', { lang: req.query.lang, category: req.query.category, from: req.body.From, callSid: req.body.CallSid });
+    const params = getTwilioParams(req);
+    console.log('[IVR] finalize', { lang: req.query.lang, category: req.query.category, from: params.From, callSid: params.CallSid });
     const language = req.query.lang === 'en' ? 'en' : 'hi';
     const requestedCategory = String(req.query.category || '');
-    const callerPhone = req.body.From;
-    const speech = String(req.body.SpeechResult || '').trim();
-    const callerCity = String(req.body.CallerCity || '').trim();
-    const callerState = String(req.body.CallerState || '').trim();
-    const callerCountry = String(req.body.CallerCountry || '').trim();
+    const callerPhone = params.From;
+    const callSid = String(params.CallSid || 'unknown');
+    let speech = String(params.SpeechResult || '').trim();
+    const recordingUrl = String(params.RecordingUrl || '').trim();
+    const callerCity = String(params.CallerCity || '').trim();
+    const callerState = String(params.CallerState || '').trim();
+    const callerCountry = String(params.CallerCountry || '').trim();
     const fallbackDescription = language === 'hi' ? 'Voice transcript capture nahi hua.' : 'Voice transcript was not captured.';
 
     let category = PRIORITY_BY_CATEGORY[requestedCategory] ? requestedCategory : 'other';
@@ -432,15 +587,30 @@ router.post('/twilio/finalize', verifyTwilioIfEnabled, async (req, res) => {
     let addressHint = '';
     let reporterName = '';
 
-    console.log('[IVR] speech', { hasSpeech: Boolean(speech), length: speech.length });
+    if (!speech && recordingUrl) {
+      try {
+        const transcriptFromRecording = await transcribeRecording({ recordingUrl, language, callSid });
+        if (transcriptFromRecording) {
+          speech = transcriptFromRecording;
+        }
+      } catch (transcriptionError) {
+        console.error('IVR recording transcription failed:', transcriptionError.message);
+      }
+    }
+
+    console.log('[IVR] speech', { hasSpeech: Boolean(speech), length: speech.length, hasRecording: Boolean(recordingUrl) });
 
     if (speech) {
       try {
-        const ai = await extractIssueWithGemini({
-          transcript: speech,
-          language,
-          fallbackCategory: category
-        });
+        const ai = await withTimeout(
+          extractIssueWithGemini({
+            transcript: speech,
+            language,
+            fallbackCategory: category
+          }),
+          IVR_GEMINI_TIMEOUT_MS,
+          'gemini'
+        );
 
         if (ai?.category && PRIORITY_BY_CATEGORY[ai.category]) {
           category = ai.category;

@@ -35,6 +35,14 @@ TWILIO_AUTH_TOKEN=your-auth-token
 TWILIO_SMS_FROM=+1XXXXXXXXXX
 GEMINI_API_KEY=your-gemini-api-key
 IVR_GEMINI_MODEL=gemini-2.0-flash
+IVR_USE_RECORDING_TRANSCRIPTION=false
+IVR_TRANSCRIPTION_PROVIDER=twilio_speech
+IVR_LOCAL_WHISPER_PYTHON=python
+IVR_LOCAL_WHISPER_SCRIPT=./scripts/transcribe_local_whisper.py
+IVR_LOCAL_WHISPER_MODEL=tiny
+IVR_LOCAL_WHISPER_DEVICE=cpu
+IVR_TRANSCRIPTION_TIMEOUT_MS=8000
+IVR_GEMINI_TIMEOUT_MS=4000
 ```
 
 Notes:
@@ -42,13 +50,27 @@ Notes:
 - After `IVR_PUBLIC_BASE_URL` is stable and correct, change to `true`.
 - `TWILIO_SMS_FROM` must be an SMS-capable Twilio number.
 
+## Optional: Local Whisper (no API billing)
+
+1. Install Python 3.10+.
+2. Install dependencies:
+   - `pip install -r civic-backend/scripts/requirements-whisper.txt`
+3. Enable local transcription in `.env`:
+   - `IVR_USE_RECORDING_TRANSCRIPTION=true`
+   - `IVR_TRANSCRIPTION_PROVIDER=local_whisper`
+   - `IVR_LOCAL_WHISPER_PYTHON=python`
+   - `IVR_LOCAL_WHISPER_SCRIPT=./scripts/transcribe_local_whisper.py`
+4. Restart backend.
+
+When enabled, IVR records caller audio and backend runs local `faster-whisper` for transcript.
+
 ## How ticket creation works
 
 - Caller number is used to find/create a citizen user.
 - Speech transcript (`SpeechResult`) is sent to Gemini for JSON extraction.
 - Gemini can refine category/priority/description/address hint.
 - Report is inserted with `status=submitted` and a status-history entry.
-- SMS confirmation is attempted through Twilio REST API.
+- SMS acknowledgement is attempted through Twilio REST API.
 - System speaks ticket ID (first 8 chars of report UUID).
 
 ## Demo test checklist

@@ -4,7 +4,7 @@ exports.getDashboardStats = async (req, res) => {
   try {
     const totalReports = await prisma.report.count({ where: { isDeleted: false } });
     const totalUsers = await prisma.user.count({ where: { isDeleted: false } });
-    
+
     // Get today's reports
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -23,8 +23,8 @@ exports.getDashboardStats = async (req, res) => {
       }
     });
 
-    const resolvedReports = await prisma.report.count({ 
-      where: { status: 'resolved', isDeleted: false } 
+    const resolvedReports = await prisma.report.count({
+      where: { status: 'resolved', isDeleted: false }
     });
 
     const activeStaff = await prisma.user.count({
@@ -83,7 +83,7 @@ exports.getReportAnalytics = async (req, res) => {
   try {
     const { timeRange } = req.query;
     let where = { isDeleted: false };
-    
+
     if (timeRange && timeRange !== 'all') {
       const days = parseInt(timeRange);
       const date = new Date();
@@ -101,7 +101,7 @@ exports.getReportAnalytics = async (req, res) => {
     // 2. Timeline stats (Daily for last 30 days)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
+
     const reports = await prisma.report.findMany({
       where: { ...where, createdAt: { gte: thirtyDaysAgo } },
       select: { createdAt: true, status: true }
@@ -112,7 +112,7 @@ exports.getReportAnalytics = async (req, res) => {
       const date = r.createdAt.toISOString().split('T')[0];
       if (!timelineMap[date]) timelineMap[date] = { _id: date, total: 0, statusCounts: [] };
       timelineMap[date].total++;
-      
+
       let statusEntry = timelineMap[date].statusCounts.find(s => s.status === r.status);
       if (!statusEntry) {
         statusEntry = { status: r.status, count: 0 };
@@ -167,7 +167,7 @@ exports.getUserAnalytics = async (req, res) => {
     // 2. Registration Trend (Monthly for last 6 months)
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-    
+
     const registrations = await prisma.user.findMany({
       where: { createdAt: { gte: sixMonthsAgo }, isDeleted: false },
       select: { createdAt: true }
@@ -367,3 +367,36 @@ exports.getDepartmentUsers = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// ── AI Bulk Reprioritization ──
+
+exports.bulkReprioritize = async (req, res) => {
+  try {
+    const { bulkReprioritize } = require('../services/aiPrioritization');
+    const { limit = 50 } = req.query;
+
+    const results = await bulkReprioritize({ limit: parseInt(limit) });
+
+    const succeeded = results.filter(r => r.status === 'success').length;
+    const failed = results.filter(r => r.status === 'failed').length;
+
+    res.status(200).json({
+      success: true,
+      message: `Bulk reprioritization complete: ${succeeded} succeeded, ${failed} failed`,
+      data: {
+        total: results.length,
+        succeeded,
+        failed,
+        results
+      }
+    });
+  } catch (error) {
+    console.error('Bulk reprioritize error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error during bulk reprioritization',
+      error: error.message
+    });
+  }
+};
+

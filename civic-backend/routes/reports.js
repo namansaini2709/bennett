@@ -34,4 +34,7 @@ router.post('/:id/feedback', protect, demoProtection, reportController.addFeedba
 router.post('/:id/media', protect, upload.array('media', 5), demoProtection, reportController.addMedia);
 router.delete('/:id/media/:mediaId', protect, demoProtection, reportController.deleteMedia);
 
+// AI Prioritization
+router.post('/:id/reprioritize', protect, authorize('supervisor', 'admin'), demoProtection, reportController.reprioritizeReport);
+
 module.exports = router;

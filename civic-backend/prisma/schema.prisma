@@ -150,6 +150,10 @@ model Report {
   description      String
   category         Category
   priority         Priority @default(medium)
+  priorityScore    Int?                  // AI-assigned 1-100 score
+  aiPriorityReasoning String?            // Gemini's explanation
+  suggestedDepartment String?            // AI-suggested department
+  aiTags           String[]              // AI-generated tags
   status           Status   @default(submitted)
   
   // Location

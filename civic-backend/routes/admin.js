@@ -19,5 +19,9 @@ router.get('/departments', adminController.getDepartments);
 router.post('/departments', authorize('admin'), demoProtection, adminController.createDepartment);
 router.put('/departments/:id', authorize('admin'), demoProtection, adminController.updateDepartment);
 router.delete('/departments/:id', authorize('admin'), demoProtection, adminController.deleteDepartment);
+router.get('/departments/:deptName/users', adminController.getDepartmentUsers);
+
+// AI Bulk Reprioritization
+router.post('/reports/bulk-reprioritize', authorize('admin'), demoProtection, adminController.bulkReprioritize);
 
 module.exports = router;

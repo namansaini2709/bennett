@@ -1,6 +1,7 @@
 const prisma = require('../config/db');
 const { validationResult } = require('express-validator');
 const cloudinary = require('../config/cloudinary');
+const { analyzeReport, analyzeAndUpdateReport } = require('../services/aiPrioritization');
 
 exports.createReport = async (req, res) => {
   try {
@@ -76,6 +77,35 @@ exports.createReport = async (req, res) => {
       await Promise.all(mediaPromises);
     }
 
+    // ── AI Prioritization (non-blocking) ──
+    // Run Gemini analysis; report is already saved with default priority
+    const mediaCount = (req.files && req.files.length) || 0;
+    try {
+      const aiResult = await analyzeReport({
+        title,
+        description,
+        category,
+        address: location.address,
+        city: location.city,
+        locality: location.locality,
+        mediaCount
+      });
+
+      await prisma.report.update({
+        where: { id: report.id },
+        data: {
+          priority: aiResult.priority,
+          priorityScore: aiResult.priorityScore,
+          aiPriorityReasoning: aiResult.reasoning,
+          suggestedDepartment: aiResult.suggestedDepartment,
+          aiTags: aiResult.tags
+        }
+      });
+    } catch (aiError) {
+      console.error('[AI-Priority] Failed for report', report.id, aiError.message);
+      // Report keeps default 'medium' priority — no user-facing error
+    }
+
     const finalReport = await prisma.report.findUnique({
       where: { id: report.id },
       include: {
@@ -124,6 +154,10 @@ exports.getAllReports = async (req, res) => {
     const take = limit ? parseInt(limit) : undefined;
     const skip = (page && limit) ? (parseInt(page) - 1) * parseInt(limit) : undefined;
 
+    // Allow sorting by priorityScore for AI-prioritized views
+    const validSortFields = ['createdAt', 'updatedAt', 'priority', 'priorityScore', 'viewCount', 'status', 'category'];
+    const safeSortBy = validSortFields.includes(sortBy) ? sortBy : 'createdAt';
+
     const reports = await prisma.report.findMany({
       where,
       include: {
@@ -136,7 +170,7 @@ exports.getAllReports = async (req, res) => {
         media: true
       },
       orderBy: {
-        [sortBy]: order
+        [safeSortBy]: order
       },
       take,
       skip
@@ -283,8 +317,8 @@ exports.updateReport = async (req, res) => {
       });
     }
 
-    if (report.reporterId !== req.user.id && 
-        !['admin', 'supervisor'].includes(req.user.role)) {
+    if (report.reporterId !== req.user.id &&
+      !['admin', 'supervisor'].includes(req.user.role)) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to update this report'
@@ -305,7 +339,7 @@ exports.updateReport = async (req, res) => {
     if (description) updateData.description = description;
     if (category) updateData.category = category;
     if (priority) updateData.priority = priority;
-    
+
     if (location) {
       if (location.address) updateData.address = location.address;
       if (location.locality) updateData.locality = location.locality;
@@ -380,7 +414,7 @@ exports.deleteReport = async (req, res) => {
     await prisma.reportStatusHistory.deleteMany({ where: { reportId: req.params.id } });
     await prisma.comment.deleteMany({ where: { reportId: req.params.id } });
     await prisma.upvote.deleteMany({ where: { reportId: req.params.id } });
-    
+
     await prisma.report.delete({ where: { id: req.params.id } });
 
     res.status(200).json({
@@ -435,7 +469,7 @@ exports.updateReportStatus = async (req, res) => {
       updateData.resolvedById = req.user.id;
       updateData.resolvedAt = new Date();
       updateData.resolutionNotes = comment;
-      
+
       const startTime = new Date(report.createdAt);
       const endTime = new Date();
       updateData.actualResolutionTime = Math.floor((endTime - startTime) / (1000 * 60 * 60));
@@ -734,7 +768,7 @@ exports.getReportStats = async (req, res) => {
     }
 
     const total = await prisma.report.count({ where });
-    
+
     const byStatus = await prisma.report.groupBy({
       by: ['status'],
       where,
@@ -872,6 +906,34 @@ exports.deleteMedia = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error deleting media',
+      error: error.message
+    });
+  }
+};
+
+// ── AI Prioritization Endpoints ──
+
+exports.reprioritizeReport = async (req, res) => {
+  try {
+    const result = await analyzeAndUpdateReport(req.params.id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Report re-prioritized successfully by AI',
+      data: {
+        reportId: req.params.id,
+        priority: result.aiResult.priority,
+        priorityScore: result.aiResult.priorityScore,
+        reasoning: result.aiResult.reasoning,
+        suggestedDepartment: result.aiResult.suggestedDepartment,
+        tags: result.aiResult.tags
+      }
+    });
+  } catch (error) {
+    console.error('Reprioritize report error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error re-prioritizing report',
       error: error.message
     });
   }

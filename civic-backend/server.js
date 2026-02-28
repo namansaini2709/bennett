@@ -11,6 +11,7 @@ const prisma = require('./config/db');
 dotenv.config();
 
 const app = express();
+app.set('trust proxy', 1);
 
 app.use(helmet());
 app.use(cors({
@@ -44,7 +45,8 @@ app.use(morgan('dev'));
 const limiter = rateLimit({
   windowMs: 1 * 60 * 1000,
   max: 1000,
-  message: 'Too many requests from this IP, please try again later.'
+  message: 'Too many requests from this IP, please try again later.',
+  skip: (req) => req.path.startsWith('/api/ivr/twilio')
 });
 app.use('/api/', limiter);
 
