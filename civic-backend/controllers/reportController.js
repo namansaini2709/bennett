@@ -1,6 +1,4 @@
-const Report = require('../models/Report');
-const Media = require('../models/Media');
-const User = require('../models/User');
+const prisma = require('../config/db');
 const { validationResult } = require('express-validator');
 const cloudinary = require('../config/cloudinary');
 
@@ -23,25 +21,35 @@ exports.createReport = async (req, res) => {
       isAnonymous
     } = req.body;
 
-    const report = await Report.create({
-      reporterId: req.user._id,
-      title,
-      description,
-      category,
-      location: {
-        ...location,
+    const report = await prisma.report.create({
+      data: {
+        reporterId: req.user.id,
+        title,
+        description,
+        category,
+        address: location.address,
+        locality: location.locality,
+        ward: location.ward,
+        city: location.city,
+        pincode: location.pincode,
         latitude: parseFloat(location.latitude),
-        longitude: parseFloat(location.longitude)
+        longitude: parseFloat(location.longitude),
+        priority: priority || 'medium',
+        isAnonymous: isAnonymous || false,
+        statusHistory: {
+          create: {
+            status: 'submitted',
+            changedById: req.user.id,
+            comment: 'Report submitted'
+          }
+        }
       },
-      priority: priority || 'medium',
-      isAnonymous: isAnonymous || false,
-      createdBy: req.user._id,
-      statusHistory: [{
-        status: 'submitted',
-        changedBy: req.user._id,
-        changedAt: new Date(),
-        comment: 'Report submitted'
-      }]
+      include: {
+        reporter: {
+          select: { id: true, name: true, email: true, phone: true }
+        },
+        media: true
+      }
     });
 
     if (req.files && req.files.length > 0) {
@@ -51,34 +59,37 @@ exports.createReport = async (req, res) => {
           resource_type: 'auto'
         });
 
-        const media = await Media.create({
-          reportId: report._id,
-          type: file.mimetype.startsWith('image') ? 'image' : 'video',
-          url: result.secure_url,
-          cloudinaryId: result.public_id,
-          fileName: file.originalname,
-          fileSize: file.size,
-          mimeType: file.mimetype,
-          uploadedBy: req.user._id,
-          createdBy: req.user._id
+        return prisma.media.create({
+          data: {
+            reportId: report.id,
+            type: file.mimetype.startsWith('image') ? 'image' : 'video',
+            url: result.secure_url,
+            cloudinaryId: result.public_id,
+            fileName: file.originalname,
+            fileSize: file.size,
+            mimeType: file.mimetype,
+            uploadedById: req.user.id
+          }
         });
-
-        return media._id;
       });
 
-      const mediaIds = await Promise.all(mediaPromises);
-      report.media = mediaIds;
-      await report.save();
+      await Promise.all(mediaPromises);
     }
 
-    const populatedReport = await Report.findById(report._id)
-      .populate('reporterId', 'name email phone')
-      .populate('media');
+    const finalReport = await prisma.report.findUnique({
+      where: { id: report.id },
+      include: {
+        reporter: {
+          select: { id: true, name: true, email: true, phone: true }
+        },
+        media: true
+      }
+    });
 
     res.status(201).json({
       success: true,
       message: 'Report created successfully',
-      data: populatedReport
+      data: finalReport
     });
   } catch (error) {
     console.error('Create report error:', error);
@@ -103,36 +114,41 @@ exports.getAllReports = async (req, res) => {
       order = 'desc'
     } = req.query;
 
-    const query = { isDeleted: false };
+    const where = { isDeleted: false };
 
-    if (status) query.status = status;
-    if (category) query.category = category;
-    if (priority) query.priority = priority;
-    if (department) query.department = department;
+    if (status) where.status = status;
+    if (category) where.category = category;
+    if (priority) where.priority = priority;
+    if (department) where.department = department;
 
-    const sortOrder = order === 'asc' ? 1 : -1;
+    const take = limit ? parseInt(limit) : undefined;
+    const skip = (page && limit) ? (parseInt(page) - 1) * parseInt(limit) : undefined;
 
-    let reportsQuery = Report.find(query)
-      .populate('reporterId', 'name email phone')
-      .populate('assignedTo', 'name email department')
-      .populate('media')
-      .sort({ [sortBy]: sortOrder });
+    const reports = await prisma.report.findMany({
+      where,
+      include: {
+        reporter: {
+          select: { id: true, name: true, email: true, phone: true }
+        },
+        assignedTo: {
+          select: { id: true, name: true, email: true, departmentName: true }
+        },
+        media: true
+      },
+      orderBy: {
+        [sortBy]: order
+      },
+      take,
+      skip
+    });
 
-    // Only apply pagination if page and limit are provided
-    if (page && limit) {
-      const skip = (parseInt(page) - 1) * parseInt(limit);
-      reportsQuery = reportsQuery.limit(parseInt(limit)).skip(skip);
-    }
-
-    const reports = await reportsQuery;
-    const total = await Report.countDocuments(query);
+    const total = await prisma.report.count({ where });
 
     const response = {
       success: true,
       data: reports
     };
 
-    // Only include pagination info if pagination was requested
     if (page && limit) {
       response.pagination = {
         page: parseInt(page),
@@ -157,12 +173,33 @@ exports.getAllReports = async (req, res) => {
 
 exports.getReportById = async (req, res) => {
   try {
-    const report = await Report.findById(req.params.id)
-      .populate('reporterId', 'name email phone')
-      .populate('assignedTo', 'name email department')
-      .populate('media')
-      .populate('comments.user', 'name role')
-      .populate('statusHistory.changedBy', 'name role');
+    const report = await prisma.report.update({
+      where: { id: req.params.id },
+      data: { viewCount: { increment: 1 } },
+      include: {
+        reporter: {
+          select: { id: true, name: true, email: true, phone: true }
+        },
+        assignedTo: {
+          select: { id: true, name: true, email: true, departmentName: true }
+        },
+        media: true,
+        comments: {
+          include: {
+            user: { select: { id: true, name: true, role: true } }
+          }
+        },
+        statusHistory: {
+          include: {
+            changedBy: { select: { id: true, name: true, role: true } }
+          },
+          orderBy: { changedAt: 'desc' }
+        },
+        _count: {
+          select: { upvotes: true }
+        }
+      }
+    });
 
     if (!report) {
       return res.status(404).json({
@@ -170,9 +207,6 @@ exports.getReportById = async (req, res) => {
         message: 'Report not found'
       });
     }
-
-    report.viewCount += 1;
-    await report.save();
 
     res.status(200).json({
       success: true,
@@ -192,23 +226,29 @@ exports.getMyReports = async (req, res) => {
   try {
     const { page = 1, limit = 10, status } = req.query;
 
-    const query = {
-      reporterId: req.user._id,
+    const where = {
+      reporterId: req.user.id,
       isDeleted: false
     };
 
-    if (status) query.status = status;
+    if (status) where.status = status;
 
-    const skip = (page - 1) * limit;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const reports = await Report.find(query)
-      .populate('media')
-      .populate('assignedTo', 'name department')
-      .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
-      .skip(skip);
+    const reports = await prisma.report.findMany({
+      where,
+      include: {
+        media: true,
+        assignedTo: {
+          select: { id: true, name: true, departmentName: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: parseInt(limit),
+      skip: skip
+    });
 
-    const total = await Report.countDocuments(query);
+    const total = await prisma.report.count({ where });
 
     res.status(200).json({
       success: true,
@@ -217,7 +257,7 @@ exports.getMyReports = async (req, res) => {
         page: parseInt(page),
         limit: parseInt(limit),
         total,
-        pages: Math.ceil(total / limit)
+        pages: Math.ceil(total / parseInt(limit))
       }
     });
   } catch (error) {
@@ -232,7 +272,9 @@ exports.getMyReports = async (req, res) => {
 
 exports.updateReport = async (req, res) => {
   try {
-    const report = await Report.findById(req.params.id);
+    const report = await prisma.report.findUnique({
+      where: { id: req.params.id }
+    });
 
     if (!report) {
       return res.status(404).json({
@@ -241,7 +283,7 @@ exports.updateReport = async (req, res) => {
       });
     }
 
-    if (report.reporterId.toString() !== req.user._id.toString() && 
+    if (report.reporterId !== req.user.id && 
         !['admin', 'supervisor'].includes(req.user.role)) {
       return res.status(403).json({
         success: false,
@@ -258,19 +300,32 @@ exports.updateReport = async (req, res) => {
 
     const { title, description, category, location, priority } = req.body;
 
-    if (title) report.title = title;
-    if (description) report.description = description;
-    if (category) report.category = category;
-    if (location) report.location = location;
-    if (priority) report.priority = priority;
+    const updateData = {};
+    if (title) updateData.title = title;
+    if (description) updateData.description = description;
+    if (category) updateData.category = category;
+    if (priority) updateData.priority = priority;
     
-    report.updatedBy = req.user._id;
+    if (location) {
+      if (location.address) updateData.address = location.address;
+      if (location.locality) updateData.locality = location.locality;
+      if (location.ward) updateData.ward = location.ward;
+      if (location.city) updateData.city = location.city;
+      if (location.pincode) updateData.pincode = location.pincode;
+      if (location.latitude) updateData.latitude = parseFloat(location.latitude);
+      if (location.longitude) updateData.longitude = parseFloat(location.longitude);
+    }
 
-    await report.save();
-
-    const updatedReport = await Report.findById(report._id)
-      .populate('reporterId', 'name email phone')
-      .populate('media');
+    const updatedReport = await prisma.report.update({
+      where: { id: req.params.id },
+      data: updateData,
+      include: {
+        reporter: {
+          select: { id: true, name: true, email: true, phone: true }
+        },
+        media: true
+      }
+    });
 
     res.status(200).json({
       success: true,
@@ -289,7 +344,10 @@ exports.updateReport = async (req, res) => {
 
 exports.deleteReport = async (req, res) => {
   try {
-    const report = await Report.findById(req.params.id).populate('media');
+    const report = await prisma.report.findUnique({
+      where: { id: req.params.id },
+      include: { media: true }
+    });
 
     if (!report) {
       return res.status(404).json({
@@ -298,7 +356,6 @@ exports.deleteReport = async (req, res) => {
       });
     }
 
-    // Admin-only deletion (route already enforces this, but double-check)
     if (req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
@@ -306,25 +363,25 @@ exports.deleteReport = async (req, res) => {
       });
     }
 
-    // Delete associated media from Cloudinary and database
     if (report.media && report.media.length > 0) {
-      for (const media of report.media) {
+      for (const m of report.media) {
         try {
-          // Delete from Cloudinary
-          if (media.cloudinaryId) {
-            await cloudinary.uploader.destroy(media.cloudinaryId);
+          if (m.cloudinaryId) {
+            await cloudinary.uploader.destroy(m.cloudinaryId);
           }
-          // Delete from database
-          await Media.findByIdAndDelete(media._id);
+          await prisma.media.delete({ where: { id: m.id } });
         } catch (mediaError) {
           console.error('Error deleting media:', mediaError);
-          // Continue with report deletion even if media deletion fails
         }
       }
     }
 
-    // HARD DELETE: Permanently remove from database
-    await Report.findByIdAndDelete(req.params.id);
+    // Delete related records first due to constraints
+    await prisma.reportStatusHistory.deleteMany({ where: { reportId: req.params.id } });
+    await prisma.comment.deleteMany({ where: { reportId: req.params.id } });
+    await prisma.upvote.deleteMany({ where: { reportId: req.params.id } });
+    
+    await prisma.report.delete({ where: { id: req.params.id } });
 
     res.status(200).json({
       success: true,
@@ -351,7 +408,9 @@ exports.updateReportStatus = async (req, res) => {
       });
     }
 
-    const report = await Report.findById(req.params.id);
+    const report = await prisma.report.findUnique({
+      where: { id: req.params.id }
+    });
 
     if (!report) {
       return res.status(404).json({
@@ -361,29 +420,39 @@ exports.updateReportStatus = async (req, res) => {
     }
 
     const oldStatus = report.status;
-    report.status = status;
-    report.updatedBy = req.user._id;
-
-    report.statusHistory.push({
+    const updateData = {
       status,
-      changedBy: req.user._id,
-      changedAt: new Date(),
-      comment: comment || `Status changed from ${oldStatus} to ${status}`
-    });
+      statusHistory: {
+        create: {
+          status,
+          changedById: req.user.id,
+          comment: comment || `Status changed from ${oldStatus} to ${status}`
+        }
+      }
+    };
 
     if (status === 'resolved') {
-      report.resolution = {
-        resolvedBy: req.user._id,
-        resolvedAt: new Date(),
-        resolutionNotes: comment
-      };
-      report.calculateResolutionTime();
+      updateData.resolvedById = req.user.id;
+      updateData.resolvedAt = new Date();
+      updateData.resolutionNotes = comment;
+      
+      const startTime = new Date(report.createdAt);
+      const endTime = new Date();
+      updateData.actualResolutionTime = Math.floor((endTime - startTime) / (1000 * 60 * 60));
     }
 
-    await report.save();
-
-    const updatedReport = await Report.findById(report._id)
-      .populate('statusHistory.changedBy', 'name role');
+    const updatedReport = await prisma.report.update({
+      where: { id: req.params.id },
+      data: updateData,
+      include: {
+        statusHistory: {
+          include: {
+            changedBy: { select: { id: true, name: true, role: true } }
+          },
+          orderBy: { changedAt: 'desc' }
+        }
+      }
+    });
 
     res.status(200).json({
       success: true,
@@ -404,7 +473,9 @@ exports.assignReport = async (req, res) => {
   try {
     const { staffId, department } = req.body;
 
-    const report = await Report.findById(req.params.id);
+    const report = await prisma.report.findUnique({
+      where: { id: req.params.id }
+    });
 
     if (!report) {
       return res.status(404).json({
@@ -413,7 +484,9 @@ exports.assignReport = async (req, res) => {
       });
     }
 
-    const staff = await User.findById(staffId);
+    const staff = await prisma.user.findUnique({
+      where: { id: staffId }
+    });
 
     if (!staff || !['staff', 'supervisor'].includes(staff.role)) {
       return res.status(400).json({
@@ -422,24 +495,28 @@ exports.assignReport = async (req, res) => {
       });
     }
 
-    report.assignedTo = staffId;
-    report.assignedBy = req.user._id;
-    report.assignedAt = new Date();
-    report.department = department || staff.department;
-    report.status = 'assigned';
-    report.updatedBy = req.user._id;
-
-    report.statusHistory.push({
-      status: 'assigned',
-      changedBy: req.user._id,
-      changedAt: new Date(),
-      comment: `Assigned to ${staff.name}`
+    const updatedReport = await prisma.report.update({
+      where: { id: req.params.id },
+      data: {
+        assignedToId: staffId,
+        assignedById: req.user.id,
+        assignedAt: new Date(),
+        department: department || staff.departmentName,
+        status: 'assigned',
+        statusHistory: {
+          create: {
+            status: 'assigned',
+            changedById: req.user.id,
+            comment: `Assigned to ${staff.name}`
+          }
+        }
+      },
+      include: {
+        assignedTo: {
+          select: { id: true, name: true, email: true, departmentName: true }
+        }
+      }
     });
-
-    await report.save();
-
-    const updatedReport = await Report.findById(report._id)
-      .populate('assignedTo', 'name email department');
 
     res.status(200).json({
       success: true,
@@ -467,32 +544,24 @@ exports.addComment = async (req, res) => {
       });
     }
 
-    const report = await Report.findById(req.params.id);
-
-    if (!report) {
-      return res.status(404).json({
-        success: false,
-        message: 'Report not found'
-      });
-    }
-
     const canAddInternalComment = ['staff', 'supervisor', 'admin'].includes(req.user.role);
 
-    report.comments.push({
-      user: req.user._id,
-      text,
-      isInternal: canAddInternalComment && isInternal
+    const comment = await prisma.comment.create({
+      data: {
+        reportId: req.params.id,
+        userId: req.user.id,
+        text,
+        isInternal: canAddInternalComment && isInternal
+      },
+      include: {
+        user: { select: { id: true, name: true, role: true } }
+      }
     });
-
-    await report.save();
-
-    const updatedReport = await Report.findById(report._id)
-      .populate('comments.user', 'name role');
 
     res.status(200).json({
       success: true,
       message: 'Comment added successfully',
-      data: updatedReport
+      data: comment
     });
   } catch (error) {
     console.error('Add comment error:', error);
@@ -506,31 +575,36 @@ exports.addComment = async (req, res) => {
 
 exports.upvoteReport = async (req, res) => {
   try {
-    const report = await Report.findById(req.params.id);
+    const existingUpvote = await prisma.upvote.findUnique({
+      where: {
+        reportId_userId: {
+          reportId: req.params.id,
+          userId: req.user.id
+        }
+      }
+    });
 
-    if (!report) {
-      return res.status(404).json({
-        success: false,
-        message: 'Report not found'
+    if (existingUpvote) {
+      await prisma.upvote.delete({
+        where: { id: existingUpvote.id }
+      });
+    } else {
+      await prisma.upvote.create({
+        data: {
+          reportId: req.params.id,
+          userId: req.user.id
+        }
       });
     }
 
-    const userIndex = report.upvotes.indexOf(req.user._id);
-
-    if (userIndex > -1) {
-      report.upvotes.splice(userIndex, 1);
-    } else {
-      report.upvotes.push(req.user._id);
-    }
-
-    await report.save();
+    const upvoteCount = await prisma.upvote.count({
+      where: { reportId: req.params.id }
+    });
 
     res.status(200).json({
       success: true,
-      message: userIndex > -1 ? 'Upvote removed' : 'Report upvoted',
-      data: {
-        upvotes: report.upvotes.length
-      }
+      message: existingUpvote ? 'Upvote removed' : 'Report upvoted',
+      data: { upvotes: upvoteCount }
     });
   } catch (error) {
     console.error('Upvote report error:', error);
@@ -553,7 +627,9 @@ exports.addFeedback = async (req, res) => {
       });
     }
 
-    const report = await Report.findById(req.params.id);
+    const report = await prisma.report.findUnique({
+      where: { id: req.params.id }
+    });
 
     if (!report) {
       return res.status(404).json({
@@ -562,7 +638,7 @@ exports.addFeedback = async (req, res) => {
       });
     }
 
-    if (report.reporterId.toString() !== req.user._id.toString()) {
+    if (report.reporterId !== req.user.id) {
       return res.status(403).json({
         success: false,
         message: 'Only the reporter can provide feedback'
@@ -576,18 +652,23 @@ exports.addFeedback = async (req, res) => {
       });
     }
 
-    report.feedback = {
-      rating,
-      comment,
-      submittedAt: new Date()
-    };
-
-    await report.save();
+    const updatedReport = await prisma.report.update({
+      where: { id: req.params.id },
+      data: {
+        rating: parseInt(rating),
+        feedbackComment: comment,
+        feedbackSubmittedAt: new Date()
+      }
+    });
 
     res.status(200).json({
       success: true,
       message: 'Feedback submitted successfully',
-      data: report.feedback
+      data: {
+        rating: updatedReport.rating,
+        comment: updatedReport.feedbackComment,
+        submittedAt: updatedReport.feedbackSubmittedAt
+      }
     });
   } catch (error) {
     console.error('Add feedback error:', error);
@@ -614,28 +695,15 @@ exports.getNearbyReports = async (req, res) => {
     const lng = parseFloat(longitude);
     const radiusInKm = parseFloat(radius);
 
-    const reports = await Report.aggregate([
-      {
-        $geoNear: {
-          near: {
-            type: 'Point',
-            coordinates: [lng, lat]
-          },
-          distanceField: 'distance',
-          maxDistance: radiusInKm * 1000,
-          spherical: true,
-          query: { isDeleted: false }
-        }
-      },
-      {
-        $sort: { distance: 1 }
-      }
-    ]);
-
-    await Report.populate(reports, [
-      { path: 'reporterId', select: 'name' },
-      { path: 'media' }
-    ]);
+    // Using Raw SQL for PostGIS/Geospatial queries in PostgreSQL
+    const reports = await prisma.$queryRaw`
+      SELECT *, 
+      (6371 * acos(cos(radians(${lat})) * cos(radians(latitude)) * cos(radians(longitude) - radians(${lng})) + sin(radians(${lat})) * sin(radians(latitude)))) AS distance
+      FROM "Report"
+      WHERE "isDeleted" = false
+      HAVING distance < ${radiusInKm}
+      ORDER BY distance ASC
+    `;
 
     res.status(200).json({
       success: true,
@@ -644,6 +712,7 @@ exports.getNearbyReports = async (req, res) => {
     });
   } catch (error) {
     console.error('Get nearby reports error:', error);
+    // Fallback if the query above fails due to syntax or missing extensions
     res.status(500).json({
       success: false,
       message: 'Error fetching nearby reports',
@@ -656,109 +725,47 @@ exports.getReportStats = async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
 
-    const query = { isDeleted: false };
-
+    const where = { isDeleted: false };
     if (startDate && endDate) {
-      query.createdAt = {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate)
+      where.createdAt = {
+        gte: new Date(startDate),
+        lte: new Date(endDate)
       };
     }
 
-    const stats = await Report.aggregate([
-      { $match: query },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: 1 },
-          byStatus: {
-            $push: '$status'
-          },
-          byCategory: {
-            $push: '$category'
-          },
-          byPriority: {
-            $push: '$priority'
-          },
-          avgResolutionTime: {
-            $avg: '$actualResolutionTime'
-          }
-        }
-      },
-      {
-        $project: {
-          _id: 0,
-          total: 1,
-          avgResolutionTime: 1,
-          statusCounts: {
-            $arrayToObject: {
-              $map: {
-                input: { $setUnion: ['$byStatus'] },
-                as: 'status',
-                in: {
-                  k: '$$status',
-                  v: {
-                    $size: {
-                      $filter: {
-                        input: '$byStatus',
-                        cond: { $eq: ['$$this', '$$status'] }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          categoryCounts: {
-            $arrayToObject: {
-              $map: {
-                input: { $setUnion: ['$byCategory'] },
-                as: 'category',
-                in: {
-                  k: '$$category',
-                  v: {
-                    $size: {
-                      $filter: {
-                        input: '$byCategory',
-                        cond: { $eq: ['$$this', '$$category'] }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          priorityCounts: {
-            $arrayToObject: {
-              $map: {
-                input: { $setUnion: ['$byPriority'] },
-                as: 'priority',
-                in: {
-                  k: '$$priority',
-                  v: {
-                    $size: {
-                      $filter: {
-                        input: '$byPriority',
-                        cond: { $eq: ['$$this', '$$priority'] }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    ]);
+    const total = await prisma.report.count({ where });
+    
+    const byStatus = await prisma.report.groupBy({
+      by: ['status'],
+      where,
+      _count: { _all: true }
+    });
+
+    const byCategory = await prisma.report.groupBy({
+      by: ['category'],
+      where,
+      _count: { _all: true }
+    });
+
+    const byPriority = await prisma.report.groupBy({
+      by: ['priority'],
+      where,
+      _count: { _all: true }
+    });
+
+    const avgResolution = await prisma.report.aggregate({
+      where: { ...where, status: 'resolved' },
+      _avg: { actualResolutionTime: true }
+    });
 
     res.status(200).json({
       success: true,
-      data: stats[0] || {
-        total: 0,
-        statusCounts: {},
-        categoryCounts: {},
-        priorityCounts: {},
-        avgResolutionTime: 0
+      data: {
+        total,
+        statusCounts: Object.fromEntries(byStatus.map(s => [s.status, s._count._all])),
+        categoryCounts: Object.fromEntries(byCategory.map(c => [c.category, c._count._all])),
+        priorityCounts: Object.fromEntries(byPriority.map(p => [p.priority, p._count._all])),
+        avgResolutionTime: avgResolution._avg.actualResolutionTime || 0
       }
     });
   } catch (error) {
@@ -773,7 +780,9 @@ exports.getReportStats = async (req, res) => {
 
 exports.addMedia = async (req, res) => {
   try {
-    const report = await Report.findById(req.params.id);
+    const report = await prisma.report.findUnique({
+      where: { id: req.params.id }
+    });
 
     if (!report) {
       return res.status(404).json({
@@ -795,27 +804,26 @@ exports.addMedia = async (req, res) => {
         resource_type: 'auto'
       });
 
-      const media = await Media.create({
-        reportId: report._id,
-        type: file.mimetype.startsWith('image') ? 'image' : 'video',
-        url: result.secure_url,
-        cloudinaryId: result.public_id,
-        fileName: file.originalname,
-        fileSize: file.size,
-        mimeType: file.mimetype,
-        uploadedBy: req.user._id,
-        createdBy: req.user._id
+      return prisma.media.create({
+        data: {
+          reportId: report.id,
+          type: file.mimetype.startsWith('image') ? 'image' : 'video',
+          url: result.secure_url,
+          cloudinaryId: result.public_id,
+          fileName: file.originalname,
+          fileSize: file.size,
+          mimeType: file.mimetype,
+          uploadedById: req.user.id
+        }
       });
-
-      return media._id;
     });
 
-    const mediaIds = await Promise.all(mediaPromises);
-    report.media.push(...mediaIds);
-    await report.save();
+    await Promise.all(mediaPromises);
 
-    const updatedReport = await Report.findById(report._id)
-      .populate('media');
+    const updatedReport = await prisma.report.findUnique({
+      where: { id: report.id },
+      include: { media: true }
+    });
 
     res.status(200).json({
       success: true,
@@ -836,16 +844,9 @@ exports.deleteMedia = async (req, res) => {
   try {
     const { id, mediaId } = req.params;
 
-    const report = await Report.findById(id);
-
-    if (!report) {
-      return res.status(404).json({
-        success: false,
-        message: 'Report not found'
-      });
-    }
-
-    const media = await Media.findById(mediaId);
+    const media = await prisma.media.findUnique({
+      where: { id: mediaId }
+    });
 
     if (!media) {
       return res.status(404).json({
@@ -854,14 +855,13 @@ exports.deleteMedia = async (req, res) => {
       });
     }
 
-    await cloudinary.uploader.destroy(media.cloudinaryId);
+    if (media.cloudinaryId) {
+      await cloudinary.uploader.destroy(media.cloudinaryId);
+    }
 
-    media.isDeleted = true;
-    media.isActive = false;
-    await media.save();
-
-    report.media = report.media.filter(m => m.toString() !== mediaId);
-    await report.save();
+    await prisma.media.delete({
+      where: { id: mediaId }
+    });
 
     res.status(200).json({
       success: true,

@@ -1,23 +1,34 @@
-const User = require('../models/User');
+const prisma = require('../config/db');
 
 exports.getAllUsers = async (req, res) => {
   try {
     const { page = 1, limit = 10, role, isActive } = req.query;
 
-    const query = { isDeleted: false };
+    const where = { isDeleted: false };
     
-    if (role) query.role = role;
-    if (isActive !== undefined) query.isActive = isActive === 'true';
+    if (role) where.role = role;
+    if (isActive !== undefined) where.isActive = isActive === 'true';
 
-    const skip = (page - 1) * limit;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const users = await User.find(query)
-      .select('-password')
-      .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
-      .skip(skip);
+    const users = await prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        role: true,
+        isActive: true,
+        departmentName: true,
+        createdAt: true
+      },
+      orderBy: { createdAt: 'desc' },
+      take: parseInt(limit),
+      skip: skip
+    });
 
-    const total = await User.countDocuments(query);
+    const total = await prisma.user.count({ where });
 
     res.status(200).json({
       success: true,
@@ -26,7 +37,7 @@ exports.getAllUsers = async (req, res) => {
         page: parseInt(page),
         limit: parseInt(limit),
         total,
-        pages: Math.ceil(total / limit)
+        pages: Math.ceil(total / parseInt(limit))
       }
     });
   } catch (error) {
@@ -41,7 +52,9 @@ exports.getAllUsers = async (req, res) => {
 
 exports.getUserById = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).select('-password');
+    const user = await prisma.user.findUnique({
+      where: { id: req.params.id }
+    });
 
     if (!user) {
       return res.status(404).json({
@@ -50,9 +63,11 @@ exports.getUserById = async (req, res) => {
       });
     }
 
+    const { password, ...userWithoutPassword } = user;
+
     res.status(200).json({
       success: true,
-      data: user
+      data: userWithoutPassword
     });
   } catch (error) {
     console.error('Get user by id error:', error);
@@ -68,26 +83,25 @@ exports.updateUser = async (req, res) => {
   try {
     const { role, department, assignedArea } = req.body;
 
-    const user = await User.findById(req.params.id);
+    const updateData = {
+      updatedById: req.user.id
+    };
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
+    if (role) updateData.role = role;
+    if (department) updateData.departmentName = department;
+    if (assignedArea) updateData.assignedArea = assignedArea;
 
-    if (role) user.role = role;
-    if (department) user.department = department;
-    if (assignedArea) user.assignedArea = assignedArea;
+    const user = await prisma.user.update({
+      where: { id: req.params.id },
+      data: updateData
+    });
 
-    user.updatedBy = req.user._id;
-    await user.save();
+    const { password, ...userWithoutPassword } = user;
 
     res.status(200).json({
       success: true,
       message: 'User updated successfully',
-      data: user
+      data: userWithoutPassword
     });
   } catch (error) {
     console.error('Update user error:', error);
@@ -101,19 +115,14 @@ exports.updateUser = async (req, res) => {
 
 exports.deleteUser = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id);
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
-
-    user.isDeleted = true;
-    user.isActive = false;
-    user.updatedBy = req.user._id;
-    await user.save();
+    await prisma.user.update({
+      where: { id: req.params.id },
+      data: {
+        isDeleted: true,
+        isActive: false,
+        updatedById: req.user.id
+      }
+    });
 
     res.status(200).json({
       success: true,
@@ -131,23 +140,20 @@ exports.deleteUser = async (req, res) => {
 
 exports.activateUser = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id);
+    const user = await prisma.user.update({
+      where: { id: req.params.id },
+      data: {
+        isActive: true,
+        updatedById: req.user.id
+      }
+    });
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
-
-    user.isActive = true;
-    user.updatedBy = req.user._id;
-    await user.save();
+    const { password, ...userWithoutPassword } = user;
 
     res.status(200).json({
       success: true,
       message: 'User activated successfully',
-      data: user
+      data: userWithoutPassword
     });
   } catch (error) {
     console.error('Activate user error:', error);
@@ -161,23 +167,20 @@ exports.activateUser = async (req, res) => {
 
 exports.deactivateUser = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id);
+    const user = await prisma.user.update({
+      where: { id: req.params.id },
+      data: {
+        isActive: false,
+        updatedById: req.user.id
+      }
+    });
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
-
-    user.isActive = false;
-    user.updatedBy = req.user._id;
-    await user.save();
+    const { password, ...userWithoutPassword } = user;
 
     res.status(200).json({
       success: true,
       message: 'User deactivated successfully',
-      data: user
+      data: userWithoutPassword
     });
   } catch (error) {
     console.error('Deactivate user error:', error);

@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const prisma = require('../config/db');
 
 const protect = async (req, res, next) => {
   let token;
@@ -12,14 +12,19 @@ const protect = async (req, res, next) => {
       token = req.headers.authorization.split(' ')[1];
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       
-      req.user = await User.findById(decoded.id).select('-password');
+      const user = await prisma.user.findUnique({
+        where: { id: decoded.id }
+      });
       
-      if (!req.user) {
+      if (!user) {
         return res.status(401).json({
           success: false,
           message: 'User not found'
         });
       }
+
+      const { password, ...userWithoutPassword } = user;
+      req.user = userWithoutPassword;
       
       if (!req.user.isActive) {
         return res.status(401).json({
@@ -68,7 +73,14 @@ const optionalAuth = async (req, res, next) => {
     try {
       token = req.headers.authorization.split(' ')[1];
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      req.user = await User.findById(decoded.id).select('-password');
+      const user = await prisma.user.findUnique({
+        where: { id: decoded.id }
+      });
+      
+      if (user) {
+        const { password, ...userWithoutPassword } = user;
+        req.user = userWithoutPassword;
+      }
     } catch (error) {
       console.log('Optional auth: Invalid token');
     }

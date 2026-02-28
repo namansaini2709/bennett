@@ -1,7 +1,8 @@
-const User = require('../models/User');
+const prisma = require('../config/db');
 const { generateToken, generateRefreshToken } = require('../utils/generateToken');
 const { validationResult } = require('express-validator');
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 
 exports.register = async (req, res) => {
   try {
@@ -15,8 +16,10 @@ exports.register = async (req, res) => {
 
     const { name, email, phone, password, address, language, role, department } = req.body;
 
-    const userExists = await User.findOne({
-      $or: [{ email }, { phone }]
+    const userExists = await prisma.user.findFirst({
+      where: {
+        OR: [{ email }, { phone }]
+      }
     });
 
     if (userExists) {
@@ -27,27 +30,42 @@ exports.register = async (req, res) => {
     }
 
     const verificationToken = crypto.randomBytes(20).toString('hex');
+    
+    // Hash password (Mongoose did this in pre-save)
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
-    const user = await User.create({
-      name,
-      email,
-      phone,
-      password,
-      address,
-      language: language || 'en',
-      role: role || 'citizen',
-      department,
-      verificationToken
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email,
+        phone,
+        password: hashedPassword,
+        street: address?.street,
+        locality: address?.locality,
+        city: address?.city,
+        state: address?.state || 'Jharkhand',
+        pincode: address?.pincode,
+        latitude: address?.latitude,
+        longitude: address?.longitude,
+        language: language || 'en',
+        role: role || 'citizen',
+        departmentName: department,
+        verificationToken
+      }
     });
 
-    const token = generateToken(user._id, user.role, user.department);
-    const refreshToken = generateRefreshToken(user._id, user.role, user.department);
+    const token = generateToken(user.id, user.role, user.departmentName);
+    const refreshToken = generateRefreshToken(user.id, user.role, user.departmentName);
+
+    // Remove password from response
+    const { password: _, ...userWithoutPassword } = user;
 
     res.status(201).json({
       success: true,
       message: 'User registered successfully',
       data: {
-        user,
+        user: userWithoutPassword,
         token,
         refreshToken
       }
@@ -74,12 +92,14 @@ exports.login = async (req, res) => {
 
     const { emailOrPhone, password } = req.body;
 
-    const user = await User.findOne({
-      $or: [
-        { email: emailOrPhone },
-        { phone: emailOrPhone }
-      ]
-    }).select('+password');
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: emailOrPhone },
+          { phone: emailOrPhone }
+        ]
+      }
+    });
 
     if (!user) {
       return res.status(401).json({
@@ -88,7 +108,7 @@ exports.login = async (req, res) => {
       });
     }
 
-    const isPasswordMatch = await user.matchPassword(password);
+    const isPasswordMatch = await bcrypt.compare(password, user.password);
 
     if (!isPasswordMatch) {
       return res.status(401).json({
@@ -104,16 +124,17 @@ exports.login = async (req, res) => {
       });
     }
 
-    const token = generateToken(user._id, user.role, user.department);
-    const refreshToken = generateRefreshToken(user._id, user.role, user.department);
+    const token = generateToken(user.id, user.role, user.departmentName);
+    const refreshToken = generateRefreshToken(user.id, user.role, user.departmentName);
 
-    user.password = undefined;
+    // Remove password from response
+    const { password: _, ...userWithoutPassword } = user;
 
     res.status(200).json({
       success: true,
       message: 'Login successful',
       data: {
-        user,
+        user: userWithoutPassword,
         token,
         refreshToken
       }
@@ -137,11 +158,22 @@ exports.logout = async (req, res) => {
 
 exports.getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id }
+    });
     
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const { password: _, ...userWithoutPassword } = user;
+
     res.status(200).json({
       success: true,
-      data: user
+      data: userWithoutPassword
     });
   } catch (error) {
     console.error('Get me error:', error);
@@ -155,26 +187,34 @@ exports.getMe = async (req, res) => {
 
 exports.updateProfile = async (req, res) => {
   try {
-    const fieldsToUpdate = {
-      name: req.body.name,
-      email: req.body.email,
-      phone: req.body.phone,
-      address: req.body.address,
-      language: req.body.language,
-      profilePicture: req.body.profilePicture
-    };
+    const { name, email, phone, address, language, profilePicture } = req.body;
 
-    Object.keys(fieldsToUpdate).forEach(key => 
-      fieldsToUpdate[key] === undefined && delete fieldsToUpdate[key]
-    );
+    const updateData = {};
+    if (name) updateData.name = name;
+    if (email) updateData.email = email;
+    if (phone) updateData.phone = phone;
+    if (language) updateData.language = language;
+    if (profilePicture) updateData.profilePicture = profilePicture;
+    
+    if (address) {
+      if (address.street) updateData.street = address.street;
+      if (address.locality) updateData.locality = address.locality;
+      if (address.city) updateData.city = address.city;
+      if (address.state) updateData.state = address.state;
+      if (address.pincode) updateData.pincode = address.pincode;
+      if (address.latitude) updateData.latitude = address.latitude;
+      if (address.longitude) updateData.longitude = address.longitude;
+    }
 
-    if (fieldsToUpdate.email || fieldsToUpdate.phone) {
-      const existingUser = await User.findOne({
-        $or: [
-          fieldsToUpdate.email && { email: fieldsToUpdate.email },
-          fieldsToUpdate.phone && { phone: fieldsToUpdate.phone }
-        ].filter(Boolean),
-        _id: { $ne: req.user.id }
+    if (email || phone) {
+      const existingUser = await prisma.user.findFirst({
+        where: {
+          OR: [
+            email ? { email } : null,
+            phone ? { phone } : null
+          ].filter(Boolean),
+          NOT: { id: req.user.id }
+        }
       });
 
       if (existingUser) {
@@ -185,19 +225,17 @@ exports.updateProfile = async (req, res) => {
       }
     }
 
-    const user = await User.findByIdAndUpdate(
-      req.user.id,
-      fieldsToUpdate,
-      {
-        new: true,
-        runValidators: true
-      }
-    );
+    const user = await prisma.user.update({
+      where: { id: req.user.id },
+      data: updateData
+    });
+
+    const { password: _, ...userWithoutPassword } = user;
 
     res.status(200).json({
       success: true,
       message: 'Profile updated successfully',
-      data: user
+      data: userWithoutPassword
     });
   } catch (error) {
     console.error('Update profile error:', error);
@@ -220,9 +258,11 @@ exports.updatePassword = async (req, res) => {
       });
     }
 
-    const user = await User.findById(req.user.id).select('+password');
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id }
+    });
 
-    const isPasswordMatch = await user.matchPassword(currentPassword);
+    const isPasswordMatch = await bcrypt.compare(currentPassword, user.password);
 
     if (!isPasswordMatch) {
       return res.status(401).json({
@@ -231,10 +271,15 @@ exports.updatePassword = async (req, res) => {
       });
     }
 
-    user.password = newPassword;
-    await user.save();
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
 
-    const token = generateToken(user._id, user.role, user.department);
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: { password: hashedPassword }
+    });
+
+    const token = generateToken(user.id, user.role, user.departmentName);
 
     res.status(200).json({
       success: true,
@@ -255,7 +300,7 @@ exports.forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
 
-    const user = await User.findOne({ email });
+    const user = await prisma.user.findUnique({ where: { email } });
 
     if (!user) {
       return res.status(404).json({
@@ -265,13 +310,20 @@ exports.forgotPassword = async (req, res) => {
     }
 
     const resetToken = crypto.randomBytes(20).toString('hex');
-    user.resetPasswordToken = crypto
+    const hashedResetToken = crypto
       .createHash('sha256')
       .update(resetToken)
       .digest('hex');
-    user.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
+    
+    const resetPasswordExpire = new Date(Date.now() + 10 * 60 * 1000);
 
-    await user.save({ validateBeforeSave: false });
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        resetPasswordToken: hashedResetToken,
+        resetPasswordExpire
+      }
+    });
 
     res.status(200).json({
       success: true,
@@ -295,9 +347,11 @@ exports.resetPassword = async (req, res) => {
       .update(req.params.resettoken)
       .digest('hex');
 
-    const user = await User.findOne({
-      resetPasswordToken,
-      resetPasswordExpire: { $gt: Date.now() }
+    const user = await prisma.user.findFirst({
+      where: {
+        resetPasswordToken,
+        resetPasswordExpire: { gt: new Date() }
+      }
     });
 
     if (!user) {
@@ -307,12 +361,19 @@ exports.resetPassword = async (req, res) => {
       });
     }
 
-    user.password = req.body.password;
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpire = undefined;
-    await user.save();
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(req.body.password, salt);
 
-    const token = generateToken(user._id, user.role, user.department);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        resetPasswordToken: null,
+        resetPasswordExpire: null
+      }
+    });
+
+    const token = generateToken(user.id, user.role, user.departmentName);
 
     res.status(200).json({
       success: true,
@@ -333,7 +394,9 @@ exports.verifyEmail = async (req, res) => {
   try {
     const { token } = req.params;
 
-    const user = await User.findOne({ verificationToken: token });
+    const user = await prisma.user.findFirst({
+      where: { verificationToken: token }
+    });
 
     if (!user) {
       return res.status(400).json({
@@ -342,9 +405,13 @@ exports.verifyEmail = async (req, res) => {
       });
     }
 
-    user.isVerified = true;
-    user.verificationToken = undefined;
-    await user.save();
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        isVerified: true,
+        verificationToken: null
+      }
+    });
 
     res.status(200).json({
       success: true,
@@ -371,8 +438,11 @@ exports.refreshToken = async (req, res) => {
       });
     }
 
+    const jwt = require('jsonwebtoken');
     const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id);
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.id }
+    });
 
     if (!user) {
       return res.status(401).json({
@@ -381,8 +451,8 @@ exports.refreshToken = async (req, res) => {
       });
     }
 
-    const newToken = generateToken(user._id, user.role, user.department);
-    const newRefreshToken = generateRefreshToken(user._id, user.role, user.department);
+    const newToken = generateToken(user.id, user.role, user.departmentName);
+    const newRefreshToken = generateRefreshToken(user.id, user.role, user.departmentName);
 
     res.status(200).json({
       success: true,

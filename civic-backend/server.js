@@ -1,5 +1,4 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const helmet = require('helmet');
@@ -7,6 +6,7 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const dotenv = require('dotenv');
 const path = require('path');
+const prisma = require('./config/db');
 
 dotenv.config();
 
@@ -18,6 +18,7 @@ app.use(cors({
     process.env.CLIENT_URL,
     process.env.ADMIN_URL,
     process.env.MOBILE_URL,
+    'http://localhost:3000',
     'http://localhost:3001',
     'http://localhost:8081',
     'http://localhost:8082',
@@ -44,6 +45,7 @@ app.use('/api/', limiter);
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Routes - Note: These currently use Mongoose controllers and will need updating
 const authRoutes = require('./routes/auth');
 const reportRoutes = require('./routes/reports');
 const userRoutes = require('./routes/users');
@@ -57,7 +59,7 @@ app.use('/api/admin', adminRoutes);
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
-    message: 'Civic Setu API is running',
+    message: 'Civic Setu API is running on Supabase',
     timestamp: new Date().toISOString()
   });
 });
@@ -80,20 +82,23 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 5000;
 
-mongoose
-  .connect(process.env.MONGODB_URI)
-  .then(() => {
-    console.log('MongoDB connected successfully');
+async function startServer() {
+  try {
+    // Test database connection
+    await prisma.$connect();
+    console.log('Successfully connected to Supabase/PostgreSQL via Prisma');
+    
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
       console.log(`Server accessible at http://localhost:${PORT}`);
-      console.log(`Server accessible at http://192.168.1.11:${PORT}`);
       console.log(`Environment: ${process.env.NODE_ENV}`);
     });
-  })
-  .catch(err => {
-    console.error('MongoDB connection error:', err);
+  } catch (error) {
+    console.error('Failed to connect to the database:', error);
     process.exit(1);
-  });
+  }
+}
+
+startServer();
 
 module.exports = app;
