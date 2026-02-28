@@ -5,32 +5,75 @@ exports.getDashboardStats = async (req, res) => {
     const totalReports = await prisma.report.count({ where: { isDeleted: false } });
     const totalUsers = await prisma.user.count({ where: { isDeleted: false } });
     
-    const statusCounts = await prisma.report.groupBy({
-      by: ['status'],
-      where: { isDeleted: false },
-      _count: { _all: true }
+    // Get today's reports
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayReports = await prisma.report.count({
+      where: {
+        isDeleted: false,
+        createdAt: { gte: today }
+      }
+    });
+
+    // Get pending reports (submitted, acknowledged, assigned, in_progress)
+    const pendingReports = await prisma.report.count({
+      where: {
+        isDeleted: false,
+        status: { in: ['submitted', 'acknowledged', 'assigned', 'in_progress'] }
+      }
     });
 
     const resolvedReports = await prisma.report.count({ 
       where: { status: 'resolved', isDeleted: false } 
     });
 
-    const resolutionRate = totalReports > 0 ? (resolvedReports / totalReports) * 100 : 0;
+    const activeStaff = await prisma.user.count({
+      where: {
+        isDeleted: false,
+        isActive: true,
+        role: { in: ['staff', 'supervisor'] }
+      }
+    });
+
+    const statusCountsRaw = await prisma.report.groupBy({
+      by: ['status'],
+      where: { isDeleted: false },
+      _count: { _all: true }
+    });
+
+    const recentReports = await prisma.report.findMany({
+      where: { isDeleted: false },
+      include: {
+        reporter: { select: { id: true, name: true } },
+        assignedTo: { select: { id: true, name: true } }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 5
+    });
+
+    // Format for frontend
+    const stats = {
+      totalReports,
+      todayReports,
+      pendingReports,
+      resolvedReports,
+      totalUsers,
+      activeStaff,
+      statusCounts: Object.fromEntries(statusCountsRaw.map(s => [s.status, s._count._all]))
+    };
 
     res.status(200).json({
       success: true,
       data: {
-        totalReports,
-        totalUsers,
-        statusCounts: Object.fromEntries(statusCounts.map(s => [s.status, s._count._all])),
-        resolutionRate: parseFloat(resolutionRate.toFixed(2))
+        stats,
+        recentReports
       }
     });
   } catch (error) {
-    console.error('Get stats error:', error);
+    console.error('Get dashboard stats error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error fetching statistics',
+      message: 'Error fetching dashboard statistics',
       error: error.message
     });
   }
@@ -38,34 +81,139 @@ exports.getDashboardStats = async (req, res) => {
 
 exports.getReportAnalytics = async (req, res) => {
   try {
+    const { timeRange } = req.query;
+    let where = { isDeleted: false };
+    
+    if (timeRange && timeRange !== 'all') {
+      const days = parseInt(timeRange);
+      const date = new Date();
+      date.setDate(date.getDate() - days);
+      where.createdAt = { gte: date };
+    }
+
+    // 1. Categories stats
     const categoryStats = await prisma.report.groupBy({
       by: ['category'],
-      where: { isDeleted: false },
+      where,
       _count: { _all: true }
     });
 
+    // 2. Timeline stats (Daily for last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    const reports = await prisma.report.findMany({
+      where: { ...where, createdAt: { gte: thirtyDaysAgo } },
+      select: { createdAt: true, status: true }
+    });
+
+    const timelineMap = {};
+    reports.forEach(r => {
+      const date = r.createdAt.toISOString().split('T')[0];
+      if (!timelineMap[date]) timelineMap[date] = { _id: date, total: 0, statusCounts: [] };
+      timelineMap[date].total++;
+      
+      let statusEntry = timelineMap[date].statusCounts.find(s => s.status === r.status);
+      if (!statusEntry) {
+        statusEntry = { status: r.status, count: 0 };
+        timelineMap[date].statusCounts.push(statusEntry);
+      }
+      statusEntry.count++;
+    });
+
+    const timeline = Object.values(timelineMap).sort((a, b) => a._id.localeCompare(b._id));
+
     res.status(200).json({
       success: true,
-      data: categoryStats
+      data: {
+        categories: categoryStats.map(c => ({ _id: c.category, count: c._count._all })),
+        timeline
+      }
     });
   } catch (error) {
+    console.error('Report analytics error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
 exports.getUserAnalytics = async (req, res) => {
   try {
-    const roleStats = await prisma.user.groupBy({
+    const { timeRange } = req.query;
+    let where = { isDeleted: false };
+
+    // 1. User role distribution
+    const roleStatsRaw = await prisma.user.groupBy({
       by: ['role'],
-      where: { isDeleted: false },
+      where,
       _count: { _all: true }
     });
 
+    // Add active/verified info (simplified for now)
+    const userStats = await Promise.all(roleStatsRaw.map(async (roleStat) => {
+      const active = await prisma.user.count({
+        where: { role: roleStat.role, isActive: true, isDeleted: false }
+      });
+      const verified = await prisma.user.count({
+        where: { role: roleStat.role, isVerified: true, isDeleted: false }
+      });
+      return {
+        _id: roleStat.role,
+        count: roleStat._count._all,
+        active,
+        verified
+      };
+    }));
+
+    // 2. Registration Trend (Monthly for last 6 months)
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    
+    const registrations = await prisma.user.findMany({
+      where: { createdAt: { gte: sixMonthsAgo }, isDeleted: false },
+      select: { createdAt: true }
+    });
+
+    const trendMap = {};
+    registrations.forEach(u => {
+      const month = u.createdAt.toLocaleString('default', { month: 'short' });
+      trendMap[month] = (trendMap[month] || 0) + 1;
+    });
+
+    const registrationTrend = Object.entries(trendMap).map(([month, count]) => ({
+      _id: month,
+      count
+    }));
+
+    // 3. Top Reporters
+    const topReportersRaw = await prisma.report.groupBy({
+      by: ['reporterId'],
+      where: { isDeleted: false },
+      _count: { _all: true },
+      orderBy: { _count: { reporterId: 'desc' } },
+      take: 10
+    });
+
+    const topReporters = await Promise.all(topReportersRaw.map(async (r) => {
+      const user = await prisma.user.findUnique({
+        where: { id: r.reporterId },
+        select: { name: true }
+      });
+      return {
+        name: user?.name || 'Anonymous',
+        reportCount: r._count._all
+      };
+    }));
+
     res.status(200).json({
       success: true,
-      data: roleStats
+      data: {
+        userStats,
+        registrationTrend,
+        topReporters
+      }
     });
   } catch (error) {
+    console.error('User analytics error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -102,7 +250,6 @@ exports.assignAreaToStaff = async (req, res) => {
 };
 
 exports.createStaffUser = async (req, res) => {
-  // Implementation for creating staff
   res.status(501).json({ success: false, message: 'Not implemented yet' });
 };
 
