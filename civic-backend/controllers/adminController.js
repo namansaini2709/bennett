@@ -77,10 +77,10 @@ exports.getDashboardStats = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Get stats error:', error);
+    console.error('Get dashboard stats error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error fetching statistics',
+      message: 'Error fetching dashboard statistics',
       error: error.message
     });
   }
@@ -89,7 +89,7 @@ exports.getDashboardStats = async (req, res) => {
 exports.getReportAnalytics = async (req, res) => {
   try {
     const { timeRange } = req.query;
-    const where = { isDeleted: false };
+    let where = { isDeleted: false };
     
     if (timeRange && timeRange !== 'all') {
       const days = parseInt(timeRange);
@@ -104,7 +104,6 @@ exports.getReportAnalytics = async (req, res) => {
         where,
         _count: { _all: true }
       }),
-      // For PostgreSQL, we can use a more efficient grouping for the timeline
       prisma.$queryRaw`
         SELECT 
           TO_CHAR("createdAt", 'YYYY-MM-DD') as "_id",
@@ -133,7 +132,7 @@ exports.getReportAnalytics = async (req, res) => {
 exports.getUserAnalytics = async (req, res) => {
   try {
     const { timeRange } = req.query;
-    const where = { isDeleted: false };
+    let where = { isDeleted: false };
     
     if (timeRange && timeRange !== 'all') {
       const days = parseInt(timeRange);
@@ -148,7 +147,6 @@ exports.getUserAnalytics = async (req, res) => {
         where: { isDeleted: false },
         _count: { 
           _all: true,
-          isActive: true, // This is a bit of a hack as Prisma groupBy doesn't directly support conditional counts easily without multiple queries
         }
       }),
       prisma.$queryRaw`
@@ -179,8 +177,6 @@ exports.getUserAnalytics = async (req, res) => {
 
     const reporterMap = Object.fromEntries(reporters.map(r => [r.id, r.name]));
 
-    // For roleStats, we need more detail than groupBy gives easily
-    // Let's do a more detailed manual aggregation or separate counts if needed
     const detailedRoleStats = await Promise.all(
       ['admin', 'supervisor', 'staff', 'citizen'].map(async (role) => {
         const [count, active, verified] = await Promise.all([
