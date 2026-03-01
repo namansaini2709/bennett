@@ -1,4 +1,4 @@
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://witless-gregg-acaulescent.ngrok-free.dev/api';
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.55.135.151:5000/api';
 
 export const CATEGORIES = {
   road_issue: 'Road Issue',

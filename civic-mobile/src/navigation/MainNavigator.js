@@ -14,6 +14,7 @@ import ReportDetailScreen from '../screens/main/ReportDetailScreen';
 import EditProfileScreen from '../screens/main/EditProfileScreen';
 import NotificationSettingsScreen from '../screens/main/NotificationSettingsScreen';
 import LanguageSelectionScreen from '../screens/main/LanguageSelectionScreen';
+import ChatScreen from '../screens/main/ChatScreen';
 
 // Staff screens
 import DashboardScreen from '../screens/staff/DashboardScreen';
@@ -170,6 +171,14 @@ const MainNavigator = () => {
       <Stack.Screen
         name="LanguageSelection"
         component={LanguageSelectionScreen}
+        options={{
+          headerShown: false,
+          presentation: 'modal',
+        }}
+      />
+      <Stack.Screen
+        name="Chat"
+        component={ChatScreen}
         options={{
           headerShown: false,
           presentation: 'modal',

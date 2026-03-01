@@ -63,8 +63,8 @@ const MapBounds = ({ reports }) => {
   useEffect(() => {
     if (reports && reports.length > 0) {
       const bounds = reports
-        .filter(report => report.location?.latitude && report.location?.longitude)
-        .map(report => [report.location.latitude, report.location.longitude]);
+        .filter(report => report.latitude && report.longitude)
+        .map(report => [report.latitude, report.longitude]);
 
       if (bounds.length > 0) {
         // Add a small delay to ensure cluster group is ready
@@ -83,17 +83,17 @@ const MapView = ({ reports, onMarkerClick, enableClustering = true }) => {
   const defaultCenter = [23.3441, 85.3096];
 
   const validReports = reports.filter(
-    report => report.location?.latitude && report.location?.longitude
+    report => report.latitude && report.longitude
   );
 
   // Render markers (used when clustering is disabled)
   const renderRegularMarkers = () => {
     return validReports.map((report) => {
-      const lat = report.location.latitude;
-      const lng = report.location.longitude;
+      const lat = report.latitude;
+      const lng = report.longitude;
       return (
         <Marker
-          key={report._id}
+          key={report.id}
           position={[lat, lng]}
           icon={createCustomIcon(getMarkerColor(report.status))}
         >
@@ -118,7 +118,7 @@ const MapView = ({ reports, onMarkerClick, enableClustering = true }) => {
                 />
               </Box>
               <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-                Reporter: {report.reporterId?.name || 'Anonymous'}
+                Reporter: {report.reporter?.name || 'Anonymous'}
               </Typography>
               <Typography variant="caption" display="block">
                 Date: {new Date(report.createdAt).toLocaleDateString()}
@@ -151,8 +151,8 @@ const MapView = ({ reports, onMarkerClick, enableClustering = true }) => {
   // Render clustered markers
   const renderClusteredMarkers = () => {
     return validReports.map((report) => {
-      const lat = report.location.latitude;
-      const lng = report.location.longitude;
+      const lat = report.latitude;
+      const lng = report.longitude;
 
       // Create popup content as JSX
       const popupContent = (
@@ -204,7 +204,7 @@ const MapView = ({ reports, onMarkerClick, enableClustering = true }) => {
 
       return (
         <ClusterMarker
-          key={report._id}
+          key={report.id}
           position={[lat, lng]}
           icon={createCustomIcon(getMarkerColor(report.status))}
           reportStatus={report.status}

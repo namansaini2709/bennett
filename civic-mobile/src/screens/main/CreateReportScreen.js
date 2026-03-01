@@ -56,6 +56,7 @@ const CreateReportScreen = ({ navigation }) => {
 
   // Success modal state
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [submittedReport, setSubmittedReport] = useState(null);
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [useManualLocation, setUseManualLocation] = useState(false);
   const [addressSuggestions, setAddressSuggestions] = useState([]);
@@ -319,6 +320,7 @@ const CreateReportScreen = ({ navigation }) => {
       const result = await reportService.createReport(reportData);
 
       if (result.success) {
+        setSubmittedReport(result.data || { title: title.trim() });
         setShowSuccessModal(true);
       } else {
         Alert.alert('Error', result.message || 'Failed to submit report. Please try again.');
@@ -807,15 +809,33 @@ const CreateReportScreen = ({ navigation }) => {
                 color="#4CAF50"
                 style={styles.successIcon}
               />
-              <Text style={styles.modalTitle}>Report Submitted Successfully!</Text>
+              <Text style={styles.modalTitle}>Report Submitted! 🎉</Text>
               <Text style={styles.modalMessage}>
-                Thank you for reporting this civic issue. Your report has been submitted and will be reviewed by the authorities.
+                Your report has been submitted and will be reviewed by authorities.
               </Text>
+
+              {/* Chat with Admin button */}
               <TouchableOpacity
-                style={styles.modalButton}
+                style={[styles.modalButton, { backgroundColor: '#4CAF50', marginBottom: 10 }]}
+                onPress={() => {
+                  setShowSuccessModal(false);
+                  navigation.navigate('Chat', {
+                    otherUserName: 'Civic Setu Support',
+                    reportTitle: submittedReport?.title || title,
+                  });
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <MaterialCommunityIcons name="chat" size={18} color="#fff" />
+                  <Text style={styles.modalButtonText}>Chat with Admin</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButton, { backgroundColor: 'rgba(0,0,0,0.08)' }]}
                 onPress={handleSuccessModalClose}
               >
-                <Text style={styles.modalButtonText}>OK</Text>
+                <Text style={[styles.modalButtonText, { color: '#333' }]}>Go to Home</Text>
               </TouchableOpacity>
             </Animatable.View>
           </View>
