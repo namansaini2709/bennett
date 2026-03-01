@@ -1,6 +1,6 @@
 const prisma = require('../config/db');
 const { validationResult } = require('express-validator');
-const cloudinary = require('../config/cloudinary');
+const { uploadFile, deleteFile } = require('../config/supabaseStorage');
 const { analyzeReport, analyzeAndUpdateReport } = require('../services/aiPrioritization');
 
 exports.createReport = async (req, res) => {
@@ -55,17 +55,18 @@ exports.createReport = async (req, res) => {
 
     if (req.files && req.files.length > 0) {
       const mediaPromises = req.files.map(async (file) => {
-        const result = await cloudinary.uploader.upload(file.path, {
-          folder: 'civic-reports',
-          resource_type: 'auto'
+        const result = await uploadFile({
+          filePath: file.path,
+          fileName: file.filename,
+          mimeType: file.mimetype
         });
 
         return prisma.media.create({
           data: {
             reportId: report.id,
             type: file.mimetype.startsWith('image') ? 'image' : 'video',
-            url: result.secure_url,
-            cloudinaryId: result.public_id,
+            url: result.url,
+            cloudinaryId: result.storagePath,
             fileName: file.originalname,
             fileSize: file.size,
             mimeType: file.mimetype,
@@ -77,10 +78,18 @@ exports.createReport = async (req, res) => {
       await Promise.all(mediaPromises);
     }
 
-    // ── AI Prioritization (non-blocking) ──
-    // Run Gemini analysis; report is already saved with default priority
+    // ── AI Vision Prioritization ──
+    // After media upload, get Cloudinary URLs and pass to Gemini Vision
+    // AI will analyze photos, auto-categorize, assess severity, and check nearby clusters
     const mediaCount = (req.files && req.files.length) || 0;
     try {
+      // Fetch uploaded image URLs from the database
+      const uploadedMedia = await prisma.media.findMany({
+        where: { reportId: report.id, type: 'image' },
+        select: { url: true }
+      });
+      const imageUrls = uploadedMedia.map(m => m.url);
+
       const aiResult = await analyzeReport({
         title,
         description,
@@ -88,22 +97,34 @@ exports.createReport = async (req, res) => {
         address: location.address,
         city: location.city,
         locality: location.locality,
-        mediaCount
+        latitude: parseFloat(location.latitude),
+        longitude: parseFloat(location.longitude),
+        mediaCount,
+        imageUrls
       });
+
+      // AI can override category based on image analysis
+      const updateData = {
+        priority: aiResult.priority,
+        priorityScore: aiResult.priorityScore,
+        aiPriorityReasoning: aiResult.reasoning,
+        suggestedDepartment: aiResult.suggestedDepartment,
+        aiTags: aiResult.tags
+      };
+
+      // If AI detected a different category from the image, update it
+      if (aiResult.category && aiResult.category !== category) {
+        updateData.category = aiResult.category;
+        console.log(`[AI-Vision] Category changed: ${category} → ${aiResult.category}`);
+      }
 
       await prisma.report.update({
         where: { id: report.id },
-        data: {
-          priority: aiResult.priority,
-          priorityScore: aiResult.priorityScore,
-          aiPriorityReasoning: aiResult.reasoning,
-          suggestedDepartment: aiResult.suggestedDepartment,
-          aiTags: aiResult.tags
-        }
+        data: updateData
       });
     } catch (aiError) {
       console.error('[AI-Priority] Failed for report', report.id, aiError.message);
-      // Report keeps default 'medium' priority — no user-facing error
+      // Report keeps default priority and citizen-selected category — no user-facing error
     }
 
     const finalReport = await prisma.report.findUnique({
@@ -401,7 +422,7 @@ exports.deleteReport = async (req, res) => {
       for (const m of report.media) {
         try {
           if (m.cloudinaryId) {
-            await cloudinary.uploader.destroy(m.cloudinaryId);
+            await deleteFile(m.cloudinaryId);
           }
           await prisma.media.delete({ where: { id: m.id } });
         } catch (mediaError) {
@@ -833,17 +854,18 @@ exports.addMedia = async (req, res) => {
     }
 
     const mediaPromises = req.files.map(async (file) => {
-      const result = await cloudinary.uploader.upload(file.path, {
-        folder: 'civic-reports',
-        resource_type: 'auto'
+      const result = await uploadFile({
+        filePath: file.path,
+        fileName: file.filename,
+        mimeType: file.mimetype
       });
 
       return prisma.media.create({
         data: {
           reportId: report.id,
           type: file.mimetype.startsWith('image') ? 'image' : 'video',
-          url: result.secure_url,
-          cloudinaryId: result.public_id,
+          url: result.url,
+          cloudinaryId: result.storagePath,
           fileName: file.originalname,
           fileSize: file.size,
           mimeType: file.mimetype,
@@ -890,7 +912,7 @@ exports.deleteMedia = async (req, res) => {
     }
 
     if (media.cloudinaryId) {
-      await cloudinary.uploader.destroy(media.cloudinaryId);
+      await deleteFile(media.cloudinaryId);
     }
 
     await prisma.media.delete({
